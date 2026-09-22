@@ -416,7 +416,11 @@ function openJournal(tab = 'pillars') {
     body.append(h('h3', {}, 'Your small steps'), h('p', {}, S.steps.length ? S.steps.join(' · ') : 'Not yet taken. The stepping stones are in the east.'));
     body.append(h('div', { class: 'btns' },
       h('button', { class: 'primary', onclick: share }, 'Share this game'),
-      h('button', { onclick: () => { if (confirm('Start over? This erases your progress on this device.')) { try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(MASK_KEY); } catch (e) {} location.reload(); } } }, 'Start over')));
+      h('button', { onclick: async () => {
+        if (await ui.choose('Start over? This erases your progress on this device.', ['Yes, start over', 'Keep my journey'])) return;
+        try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(MASK_KEY); } catch (e) {}
+        location.reload();
+      } }, 'Start over')));
     body.append(h('p', { class: 'fine' }, C.DISCLAIMER + ' Everything you write stays on this device.'));
   }
 }
@@ -424,9 +428,12 @@ function openJournal(tab = 'pillars') {
 async function share() {
   const data = { title: C.TITLE, text: 'A quiet little game about the six pillars of Acceptance & Commitment Therapy.', url: location.href.split('#')[0] };
   try {
-    if (navigator.share) await navigator.share(data);
-    else { await navigator.clipboard.writeText(data.url); ui.toast('Link copied'); }
-  } catch (e) {}
+    await navigator.share(data);
+  } catch (e) {
+    // Web Share can be missing or blocked (e.g. inside an embedded viewer); copy the link instead.
+    try { await navigator.clipboard.writeText(data.url); ui.toast('Link copied'); }
+    catch (e2) { ui.toast('Copy the address from your browser to share'); }
+  }
 }
 
 // ---------- title, character select, start ----------
@@ -448,7 +455,7 @@ function title() {
   const status = h('p', { class: 'fine' }, 'grinding ink…');
   const btns = h('div', { class: 'btns', hidden: '' },
     hasSave ? h('button', { class: 'primary', onclick: () => begin(false) }, 'Continue') : null,
-    h('button', { class: hasSave ? '' : 'primary', onclick: () => { if (!hasSave || confirm('Start a new journey? Your current progress will be erased.')) begin(true); } }, hasSave ? 'New journey' : 'Begin'));
+    h('button', { class: hasSave ? '' : 'primary', onclick: async () => { if (!hasSave || !(await ui.choose('Start a new journey? Your current progress will be erased.', ['Yes, begin again', 'Cancel']))) begin(true); } }, hasSave ? 'New journey' : 'Begin'));
   p.append(h('div', { class: 'seal' }, '心'), h('h1', {}, C.TITLE), h('p', { class: 'sub' }, C.SUBTITLE), status, btns,
            h('p', { class: 'fine foot' }, C.DISCLAIMER, h('br'), 'Best with sound. On iPhone: Share → Add to Home Screen for full screen.'));
   return { ready: () => { status.remove(); btns.hidden = false; } };
