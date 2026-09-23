@@ -1,7 +1,7 @@
 // The six guardians' mini-exercises. Each takes the open panel element and
 // the save state, runs until the player finishes, then resolves.
 
-import { h, wait, say, choose } from './ui.js';
+import { h, wait, say, choose, firstTap } from './ui.js';
 import { drawCharacter, drawGuardian, drawCreature, drawEnso } from './art.js';
 import { VALUE_LANTERNS, SMALL_STEPS, CREATURES, PILLARS } from './content.js';
 import * as audio from './audio.js';
@@ -79,6 +79,7 @@ const TEXT = {
     intro: 'Choose up to three lanterns that feel like yours. There are no right answers.',
     light: ['Choose a lantern first', 'Light 1 lantern', 'Light 2 lanterns', 'Light 3 lanterns'],
     max: 'Three is plenty for now. Tap a chosen lantern again to set it down.',
+    lit: 'Your lanterns are lit',
     rise: 'The lanterns rise. If you like, write a sentence about why one of them matters to you. It stays on this device.',
     note: 'Optional', cont: 'Continue',
     outro: ['Lumen: "A value is a direction, not a place you arrive. You can always take one more step toward it."',
@@ -99,7 +100,7 @@ const TEXT = {
   },
 };
 
-const INK = '#1d1b19', PAPER = '#f7f2e7';
+const INK = '#1d1b19';
 const SERIF = '"Iowan Old Style", Palatino, Georgia, serif';
 const fmt = (s, o) => s.replace(/\{(\w+)\}/g, (_, k) => o[k]);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -122,13 +123,14 @@ document.head.append(h('style', {}, `
 #panel.exercise .chip.mine.on { background: var(--ink); }
 #panel.exercise .lightbtn { width: 100%; margin: 0 0 12px; font-size: 18px; padding: .75em 1em; color: var(--ink); background: linear-gradient(#fbdc86, #f0b43c);
   border: 2px solid #8a5a12; box-shadow: 0 0 20px 5px rgba(246,194,74,.6), 2px 3px 0 rgba(29,27,25,.2); }
-#panel.exercise .lightbtn:disabled { opacity: 1; background: transparent; color: var(--ink-soft); border: 1.5px dashed var(--ink-soft); box-shadow: none; }
+#panel.exercise .lightbtn:disabled:not(.lit) { opacity: 1; background: transparent; color: var(--ink-soft); border: 1.5px dashed var(--ink-soft); box-shadow: none; }
+#panel.exercise .lightbtn.lit { opacity: 1; }
+#panel.exercise .grid2 { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+#panel.exercise .grid2 .chip { border-radius: 14px; padding: .45em .6em; line-height: 1.25; }
 #panel.exercise .labels { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
 #panel.exercise .labels button { border-radius: 12px; padding: .55em .4em; }
 #panel.exercise .labels button:last-child { grid-column: 1 / -1; }
 `));
-// iOS Safari only shows :active styles when a touchstart listener exists.
-document.addEventListener('touchstart', () => {}, { passive: true });
 
 // A canvas with a draw loop, a message line and a button row.
 function stage(p, title, cls = '') {
@@ -153,14 +155,14 @@ function stage(p, title, cls = '') {
     set(...nodes) { ctl.replaceChildren(...nodes); },
     pt(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; },
     // One tap acts once: the tapped button shows pressed at once, the others disable.
+    // firstTap also ignores the tail of a double tap on whatever was here before.
     buttons(labels, cls = i => i === 0 ? 'primary' : '', wrap = '') {
       return new Promise(res => {
-        let done = false;
-        const bs = labels.map((l, i) => h('button', { class: cls(i), onclick: e => {
-          if (done) return; done = true;
-          for (const b of bs) if (b === e.currentTarget) b.classList.add('on'); else b.disabled = true;
+        const act = firstTap((i, t) => {
+          for (const b of bs) if (b === t) b.classList.add('on'); else b.disabled = true;
           audio.soft(); res(i);
-        } }, l));
+        });
+        const bs = labels.map((l, i) => h('button', { class: cls(i), onclick: e => act(i, e.currentTarget) }, l));
         ctl.replaceChildren(...(wrap ? [h('div', { class: wrap }, bs)] : bs));
       });
     },
@@ -196,7 +198,7 @@ async function present(p, S) {
   });
   st.msg(T.intro);
   if (await st.buttons([T.begin, T.skip]) === 1) skip = true;
-  const skipBtn = h('button', { onclick: () => { skip = true; skipBtn.disabled = true; } }, T.skip);
+  const skipBtn = h('button', { onclick: firstTap(() => { skip = true; skipBtn.disabled = true; }) }, T.skip);
   st.set(skipBtn);
   const animate = async (from, to, secs, text, inhale) => {
     word = text; audio.breath(inhale, secs);
@@ -218,15 +220,13 @@ async function present(p, S) {
   st.msg(T.notice);
   let n = 0;
   await new Promise(res => {
-    const go = h('button', { class: 'primary', disabled: '', onclick: () => { go.disabled = true; go.classList.add('on'); audio.soft(); res(); } }, T.cont);
-    const chips = T.things.map(s => h('button', { class: 'chip', onclick: e => {
-      const b = e.currentTarget;
-      if (b.classList.contains('on')) return;
+    const go = h('button', { class: 'primary', disabled: '', onclick: firstTap(() => { go.classList.add('on'); audio.soft(); res(); }) }, T.cont);
+    const chips = T.things.map(s => { const b = h('button', { class: 'chip', onclick: firstTap(() => {
       b.classList.add('on'); audio.soft(); n++;
       st.msg(n >= 4 ? T.enough : fmt(T.count, { n }));
       if (n >= 4) go.disabled = false;
-    } }, s));
-    st.set(h('div', { class: 'chips' }, chips), go);
+    }) }, s); return b; });
+    st.set(h('div', { class: 'chips grid2' }, chips), go);
   });
   st.stop();
 }
@@ -258,7 +258,7 @@ async function defusion(p, S) {
   st.msg(T.intro);
   let placed = 0;
   await new Promise(res => {
-    const go = h('button', { class: 'primary', disabled: '', onclick: () => { go.disabled = true; go.classList.add('on'); audio.soft(); res(); } }, T.cont);
+    const go = h('button', { class: 'primary', disabled: '', onclick: firstTap(() => { go.classList.add('on'); audio.soft(); res(); }) }, T.cont);
     const place = text => {
       const lower = /^I\b/.test(text) ? text : text.charAt(0).toLowerCase() + text.slice(1);
       st.msg(fmt(T.having, { thought: lower }));
@@ -266,7 +266,7 @@ async function defusion(p, S) {
       placed++; audio.soft();
       if (placed >= 3) go.disabled = false;
     };
-    const chips = T.thoughts.map(t => h('button', { class: 'chip', onclick: e => { e.currentTarget.disabled = true; place(t); } }, t));
+    const chips = T.thoughts.map(t => { const b = h('button', { class: 'chip', onclick: firstTap(() => { b.disabled = true; place(t); }) }, t); return b; });
     const input = h('input', { type: 'text', maxlength: '40', placeholder: T.own, enterkeyhint: 'done' });
     const own = h('form', { class: 'own', onsubmit: e => { e.preventDefault(); if (input.value.trim()) { place(input.value.trim()); input.value = ''; input.blur(); } } },
       input, h('button', { type: 'submit' }, T.leaf));
@@ -406,24 +406,27 @@ async function acceptance(p, S) {
 // ---------- Self-as-Context: you are the sky, not the weather ----------
 async function selfctx(p, S) {
   const T = TEXT.selfctx, st = stage(p, PILLARS.selfctx.region, 'drag mid'), GOAL = 10;
-  const deck = shuffle(T.weather.slice()), LANES = [.1, .23, .36, .49];
+  const STORMY = ['storm', 'rain', 'wind'], LANES = [.1, .23, .36, .49];
+  const decks = { calm: shuffle(T.weather.filter(w => !STORMY.includes(w[0]))), storm: shuffle(T.weather.filter(w => STORMY.includes(w[0]))) };
+  const dealt = { calm: 0, storm: 0 };
   const items = [];
-  let dealt = 0, noticed = 0, sel = null, drag = null, mood = 'gentle', burst = 0, nextAt = 3.6, thunderAt = 0, last = 0, now = 0;
+  let started = false, noticed = 0, sel = null, drag = null, mood = 'gentle', burst = 0, nextAt = 3.6, thunderAt = 0, last = 0, now = 0;
   const spawn = (v, x = -50) => {
-    const [kind, text] = deck[dealt++ % deck.length];
+    const d = mood === 'storm' ? 'storm' : 'calm', [kind, text] = decks[d][dealt[d]++ % decks[d].length];
     const room = l => Math.min(Infinity, ...items.filter(it => it.lane === l).map(it => it.x));
     const lane = [0, 1, 2, 3].sort((a, b) => room(b) - room(a) || Math.random() - .5)[0];
     items.push({ kind, text, lane, x, v, name: null, fade: 1, swell: 1, seed: Math.random() * 9 });
   };
   st.draw((g, W, H, t) => {
     const dt = Math.min(.05, t - last); last = now = t;
-    if (!dealt) { spawn(18, W * .2); spawn(20, W * .55); }  // a little weather is already here
+    if (!started) { started = true; spawn(18, W * .2); spawn(20, W * .55); }  // a little weather is already here
     const tempo = { gentle: [3.6, 3, 18, 1], storm: [1.5, 7, 36, 2], calm: [3.8, 3, 16, 1] }[mood];
     if (noticed < GOAL && t >= nextAt) {
       for (let i = 0; i < tempo[3]; i++) if (items.filter(it => !it.name).length < tempo[1]) spawn(tempo[2] + Math.random() * 8, -50 - i * 90);
       nextAt = t + tempo[0];
     }
-    for (; burst > 0; burst--) spawn(36 + Math.random() * 8, -50 - burst * 90);
+    for (let k = 0; k < burst; k++) spawn(36 + Math.random() * 8, 20 - k * 80);    // the storm arrives all at once
+    burst = 0;
     if (mood === 'storm' && t >= thunderAt) { audio.thud(); thunderAt = t + 3 + Math.random() * 2; }
     for (const it of items) {
       if (it !== sel) it.x += it.v / it.swell * dt;
@@ -439,12 +442,14 @@ async function selfctx(p, S) {
       const gl = g.createRadialGradient(W / 2, y, 4, W / 2, y, W * .45);
       gl.addColorStop(0, `rgba(255,250,236,${a})`); gl.addColorStop(1, 'rgba(255,250,236,0)'); g.fillStyle = gl; g.fillRect(0, 0, W, H);
     }
-    for (const it of items) {
-      const y = LANES[it.lane] * H + Math.sin(t + it.seed) * 3;
-      for (const mirror of [false, true]) {
-        g.globalAlpha = it.fade * (mirror ? .3 : 1);
-        g.save(); g.translate(it.x, mirror ? H * 1.24 - y : y); g.scale(it.swell, it.swell); drawWeather(g, it.kind, 0, 0, t); g.restore();
-      }
+    const yOf = it => LANES[it.lane] * H + Math.sin(t + it.seed) * 3;
+    for (const it of items) for (const mirror of [false, true]) {
+      const y = yOf(it);
+      g.globalAlpha = it.fade * (mirror ? .3 : 1);
+      g.save(); g.translate(it.x, mirror ? H * 1.24 - y : y); g.scale(it.swell, it.swell); drawWeather(g, it.kind, 0, 0, t); g.restore();
+    }
+    for (const it of items) {                                  // words on top, so they stay readable in a storm
+      const y = yOf(it);
       g.globalAlpha = it.fade;
       label(g, it.text, it.x, y + 32 * it.swell, 'italic 13px ' + SERIF);
       if (it.name) label(g, it.name, it.x, y - 26, 'bold 13px ' + SERIF);
@@ -542,9 +547,12 @@ async function values(p, S) {
     drawGuardian(g, 'values', W * .12, H * .97, t, true, PILLARS.values.color);
   });
   st.msg(T.intro);
+  let go;
   await new Promise(res => {
-    const go = h('button', { class: 'lightbtn', disabled: '', onclick: () => { if (!chosen.length) return; go.disabled = true; res(); } }, T.light[0]);
+    const armed = performance.now() + 250;                 // ignore the tail of the tap that closed the dialog
+    go = h('button', { class: 'lightbtn', disabled: '', onclick: () => { if (!chosen.length || go.classList.contains('lit')) return; go.classList.add('lit'); go.disabled = true; res(); } }, T.light[0]);
     const chips = VALUE_LANTERNS.map(v => h('button', { class: 'chip', onclick: e => {
+      if (performance.now() < armed) return;
       const b = e.currentTarget, i = chosen.indexOf(v);
       if (i >= 0) { chosen.splice(i, 1); b.classList.remove('on'); st.msg(T.intro); }
       else if (chosen.length < 3) { chosen.push(v); b.classList.add('on'); audio.soft(); st.msg(T.intro); }
@@ -555,12 +563,13 @@ async function values(p, S) {
   });
   lit = 0.01; audio.chime();
   S.values = chosen.slice();
+  go.textContent = T.lit;
   st.msg(T.rise);
   const input = h('textarea', { rows: '2', maxlength: '200', placeholder: T.note });
   input.value = S.valueNote || '';
   await new Promise(res => {
-    const go = h('button', { class: 'primary', onclick: () => { go.disabled = true; S.valueNote = input.value.trim(); input.blur(); res(); } }, T.cont);
-    st.set(input, go);
+    const cont = h('button', { class: 'primary', onclick: firstTap(() => { cont.disabled = true; S.valueNote = input.value.trim(); input.blur(); res(); }) }, T.cont);
+    st.set(go, input, cont);                              // the lit button stays put, so a double tap can't land in the text box
   });
   st.stop();
   await say(T.outro);
