@@ -2,7 +2,7 @@
   --paper: #efe7d6;
   --paper-2: #f7f2e7;
   --ink: #1d1b19;
-  --ink-soft: #5b564e;
+  --ink-soft: #4a453f;
   --seal: #b33a2e;
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --safe-t: env(safe-area-inset-top, 0px);
@@ -17,13 +17,19 @@ html, body {
 body { position: fixed; inset: 0; }
 [hidden] { display: none !important; }
 canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+/* No double-tap-zoom anywhere in the UI. #panel scrolls, and touch-action only reaches down
+   to the nearest scroll container, so the body's setting doesn't cover what's inside panels.
+   :where() keeps this at zero specificity so a stage canvas can still opt into touch-action:none. */
+:where(#panel, #panel *, #dialog, #dialog *, #hud, #hud *, button, input, textarea) { touch-action: manipulation; }
 
 button, .linkbtn {
   font: inherit; display: inline-block; text-decoration: none; color: var(--ink); background: var(--paper-2); border: 1.5px solid var(--ink);
   border-radius: 999px; padding: .6em 1.1em; font-size: 16px; cursor: pointer;
   box-shadow: 2px 3px 0 rgba(29, 27, 25, .18);
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
-button:active { transform: translateY(1px); box-shadow: 1px 1px 0 rgba(29, 27, 25, .18); }
+button:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(29, 27, 25, .18); background-color: var(--paper); }
+button.primary:active, .chip.on:active, .tabs .on:active { background-color: #3a3632; }
 button.primary { background: var(--ink); color: var(--paper-2); }
 button:disabled { opacity: .4; }
 button.quiet { border-style: dashed; background: transparent; box-shadow: none; }
@@ -47,8 +53,9 @@ button.quiet { border-style: dashed; background: transparent; box-shadow: none; 
 
 #toast {
   position: fixed; left: 50%; top: calc(var(--safe-t) + 70px); transform: translateX(-50%); pointer-events: none;
-  font-size: 22px; letter-spacing: .06em; color: var(--ink); text-shadow: 0 0 12px var(--paper), 0 0 4px var(--paper);
-  opacity: 0; transition: opacity .8s; white-space: nowrap; font-style: italic;
+  font-size: 22px; letter-spacing: .06em; color: var(--ink); background: rgba(247, 242, 231, .92); padding: 6px 20px;
+  border-radius: 999px; box-shadow: 0 0 18px 6px rgba(247, 242, 231, .7);
+  opacity: 0; transition: opacity .8s; white-space: nowrap; font-style: italic; z-index: 10;
 }
 #toast.show { opacity: 1; }
 
@@ -75,7 +82,7 @@ button.quiet { border-style: dashed; background: transparent; box-shadow: none; 
 #panel > * { width: 100%; max-width: 560px; }
 #panel h2 { font-weight: normal; letter-spacing: .04em; margin: 4px 0 8px; text-align: center; }
 #panel .title { font-size: 22px; }
-#panel .stage { width: 100%; height: 42vh; min-height: 220px; border: 2px solid var(--ink); border-radius: 12px; background: var(--paper-2); display: block; touch-action: manipulation; flex: none; }
+#panel .stage { width: 100%; height: 42vh; min-height: 220px; border: 2px solid var(--ink); border-radius: 12px; background: var(--paper-2); display: block; flex: none; }
 #panel .msg { min-height: 3em; font-size: 17px; line-height: 1.45; text-align: center; margin: 12px 0; }
 #panel .ctl, #panel .btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 10px; }
@@ -90,11 +97,12 @@ textarea { margin-bottom: 8px; resize: none; }
 .region { font-style: italic; color: var(--ink-soft); margin: 0 0 4px; text-align: center; }
 .learned { border-top: 1px dashed var(--ink-soft); padding-top: 12px; font-style: italic; }
 .fine { font-size: 14px; color: var(--ink-soft); text-align: center; line-height: 1.45; }
-details.more { margin: 10px 0; border-left: 3px solid var(--ink); padding-left: 12px; }
-details.more summary { cursor: pointer; font-style: italic; list-style: none; }
-details.more summary::before { content: '+ '; }
-details.more[open] summary::before { content: '– '; }
-details.more p { font-size: 16px; }
+.more { margin: 10px 0; border-left: 3px solid var(--ink); padding-left: 12px; }
+.more .toggle { background: none; border: 0; box-shadow: none; border-radius: 6px; padding: 10px 12px 10px 0; min-height: 44px; font-style: italic; }
+.more .toggle:active { transform: none; background: rgba(29, 27, 25, .08); }
+.more .toggle::before { content: '+ '; }
+.more .toggle[aria-expanded="true"]::before { content: '– '; }
+.more p { font-size: 16px; }
 .verse { margin: 16px 0; padding: 12px 16px; border-left: 3px solid var(--seal); font-style: italic; font-size: 17px; line-height: 1.5; }
 .verse cite { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
 
@@ -104,26 +112,28 @@ details.more p { font-size: 16px; }
 .mlabel { font-size: 13px; color: var(--ink-soft); text-align: center; letter-spacing: .1em; }
 .meter { height: 10px; border: 1.5px solid var(--ink); border-radius: 999px; overflow: hidden; margin: 4px 0; }
 .meter i { display: block; height: 100%; background: var(--ink); width: 60%; }
-.moves { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.moves { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 8px; }
 .moves button { font-size: 15px; padding: .7em .5em; border-radius: 12px; }
 .moves .primary { grid-column: 1 / -1; }
 .lore { font-style: italic; text-align: center; }
 
 /* Title */
-#panel.titlescreen { background: rgba(239, 231, 214, .55); justify-content: center; text-align: center; }
-.titlescreen h1 { font-weight: normal; font-size: 44px; letter-spacing: .06em; margin: 8px 0; text-shadow: 0 0 20px var(--paper); }
-.titlescreen .sub { font-style: italic; font-size: 17px; margin: 0 auto 28px; max-width: 320px; text-shadow: 0 0 10px var(--paper); }
+#panel.titlescreen { background: rgba(239, 231, 214, .45); justify-content: center; text-align: center; }
+#panel > .titlecard { max-width: 400px; margin: auto 0; padding: 26px 20px 18px; border-radius: 22px;
+  background: rgba(247, 242, 231, .93); box-shadow: 0 0 40px 18px rgba(247, 242, 231, .75); }
+.titlescreen h1 { font-weight: normal; font-size: 40px; letter-spacing: .06em; margin: 12px 0 8px; }
+.titlescreen .sub { font-style: italic; font-size: 17px; line-height: 1.4; margin: 0 auto 26px; max-width: 320px; }
 .titlescreen .btns { flex-direction: column; align-items: center; }
 .titlescreen .btns button { min-width: 200px; }
-.titlescreen .foot { margin-top: 40px; }
-#panel > .seal { width: 64px; height: 64px; margin: 0 auto; background: var(--seal); color: var(--paper-2); font-size: 40px; line-height: 64px; border-radius: 10px; transform: rotate(-4deg); box-shadow: 2px 3px 0 rgba(0, 0, 0, .15); }
+.titlescreen .foot { margin: 30px 0 0; }
+.seal { width: 64px; height: 64px; margin: 0 auto; background: var(--seal); color: var(--paper-2); font-size: 40px; line-height: 64px; border-radius: 10px; transform: rotate(-4deg); box-shadow: 2px 3px 0 rgba(0, 0, 0, .15); }
 
 /* Character select & journal grids */
 #panel.select { justify-content: center; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.charcard { border-radius: 14px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; }
-.charcard canvas { width: 60px; height: 60px; }
-.charcard small, .spirit small { font-size: 13px; color: var(--ink-soft); line-height: 1.3; }
+.charcard { border-radius: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 10px 16px; }
+.charcard canvas { width: 96px; height: 96px; }
+.spirit small { font-size: 13px; color: var(--ink-soft); line-height: 1.3; }
 
 .jhead { display: flex; justify-content: space-between; align-items: center; }
 .jhead .close { padding: .4em .9em; }

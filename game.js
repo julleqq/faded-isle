@@ -135,8 +135,7 @@ function update(dt, t) {
   paint(player.x, player.y - 8, 150, dt * 0.5);
 
   near = interactables.find(o => Math.hypot(o.x - player.x, o.y - player.y) < o.r) || null;
-  const btn = $('#act');
-  btn.hidden = !near; if (near) btn.textContent = near.label;
+  setAct(near && near.label);
 
   const region = W.regionAt(player.x, player.y);
   if (region !== lastRegion) { lastRegion = region; if (region) ui.toast(C.PILLARS[region].region); }
@@ -211,33 +210,47 @@ function render(t, dt) {
 }
 
 let last = performance.now();
+const panelEl = $('#panel');
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   const t = now / 1000;
   if (map) update(dt, t);
-  render(t, dt);
+  // Skip drawing the world while an opaque panel covers it (only the title screen is see-through),
+  // so the main thread stays free to answer taps.
+  if (panelEl.hidden || panelEl.classList.contains('titlescreen')) render(t, dt);
   requestAnimationFrame(frame);
 }
 
 // ---------- interactions ----------
+const actBtn = $('#act'); let actLabel = null;
+function setAct(label) {                 // touch the DOM only when the label changes, not every frame
+  if (label === actLabel) return;
+  actLabel = label; actBtn.hidden = !label; if (label) actBtn.textContent = label;
+}
 let acting = false;
 async function interact() {
   if (!near || acting || ui.busy) return;
-  acting = true; $('#act').hidden = true;
+  acting = true; setAct(null);
   try { await near.run(); } finally { acting = false; save(); }
 }
-$('#act').addEventListener('click', interact);
+actBtn.addEventListener('click', interact);
 
 function bloom(x, y, R, dur, done) { blooms.push({ x, y, R, dur, t: 0, done }); }
 const doneCount = () => C.PILLAR_ORDER.filter(k => S.done[k]).length;
 
+let meeting = false;
 async function meetGuardian(k) {
-  const P = C.PILLARS[k], short = P.guardian.split(',')[0];
-  if (S.done[k]) {
-    await ui.say([`${short}: "Welcome back, friend."`, `${P.rumi.replace('\n', ' ')}  (${P.rumiSource})`]);
-    return;
-  }
-  await ui.say(P.greet);
+  if (meeting) return;
+  meeting = true;
+  try { await meet(k); } finally { meeting = false; }
+}
+async function meet(k) {
+  const P = C.PILLARS[k], short = P.guardian.split(',')[0], again = !!S.done[k];
+  if (again) {
+    const i = await ui.choose(`${short}: "Welcome back, friend."`, ['Practice again', 'Hear their verse', 'Goodbye']);
+    if (i === 1) return ui.say([`${P.rumi.replace('\n', ' ')}  (${P.rumiSource})`]);
+    if (i === 2) return;
+  } else await ui.say(P.greet);
   const p = ui.openPanel('exercise');
   await EXERCISES[k](p, S);
   p.innerHTML = '';
@@ -247,9 +260,10 @@ async function meetGuardian(k) {
     h('p', {}, P.plain),
     ui.learnMore(P.more),
     ui.verse(P.rumi, P.rumiSource),
-    h('p', { class: 'learned' }, `You learned a new way to meet the wild spirits: “${C.MOVES[P.move].name}”.`),
+    again ? null : h('p', { class: 'learned' }, `You learned a new way to meet the wild spirits: “${C.MOVES[P.move].name}”.`),
   ], ['Continue']);
   ui.closePanel();
+  if (again) { save(); return; }
   S.done[k] = true; save(); updateHud();
   const c = center(k);
   bloom(c.x, c.y, 11 * TILE, 3);
@@ -315,6 +329,10 @@ async function encounter() {
   };
   draw();
   const learned = ['notice', ...C.PILLAR_ORDER.filter(k => S.done[k]).map(k => C.PILLARS[k].move)];
+  const SOFTENS = ' It softens noticeably.', TIP = '  (Fighting what we feel tends to make it bigger. ACT calls this the struggle switch.)';
+  // Reserve room for the longest message this encounter can show, so the move buttons never jump between turns.
+  msg.style.minHeight = Math.max(...[...learned.map(id => C.MOVES[id].text + SOFTENS), ...C.STRUGGLE_MOVES.map(m => m.text + (S.tip ? '' : TIP))]
+    .map(t => (msg.textContent = t, msg.offsetHeight))) + 'px';
   msg.textContent = known ? `${cr.name} again. You have met before.` : `A wild ${cr.name} drifts out of the grey grass.`;
 
   const outcome = await new Promise(res => {
@@ -329,7 +347,7 @@ async function encounter() {
     const useMove = id => {
       const m = C.MOVES[id], weak = m.pillar && cr.weak.includes(m.pillar);
       struggle = Math.max(0, struggle + m.effect * (weak ? 1.6 : 1));
-      msg.textContent = m.text + (weak ? ' It softens noticeably.' : '');
+      msg.textContent = m.text + (weak ? SOFTENS : '');
       audio.soft();
       if (struggle <= 0) return res('friend');
       turn();
@@ -338,7 +356,7 @@ async function encounter() {
       struggle = Math.min(100, struggle + 18);
       msg.textContent = m.text;
       audio.thud();
-      if (!S.tip) { S.tip = true; msg.textContent += '  (Fighting what we feel tends to make it bigger. ACT calls this the struggle switch.)'; }
+      if (!S.tip) { S.tip = true; msg.textContent += TIP; }
       if (struggle >= 100) return res('tired');
       turn();
     };
@@ -357,7 +375,7 @@ async function encounter() {
   } else {
     msg.textContent = `You leave ${cr.name} be. It will be back sometime, and that's all right.`;
   }
-  await new Promise(res => moves.append(h('button', { class: 'primary', onclick: res }, 'Continue')));
+  await new Promise(res => moves.append(h('button', { class: 'primary', onclick: ui.firstTap(res) }, 'Continue')));
   cancelAnimationFrame(raf);
   ui.closePanel();
 }
@@ -473,7 +491,8 @@ function drawCharPreview(canvas, id) {
   const loop = () => {
     if (!canvas.isConnected) return cancelAnimationFrame(raf);
     const t = performance.now() / 1000;
-    g.setTransform(2, 0, 0, 2, 0, 0); g.clearRect(0, 0, 60, 60);
+    const k = canvas.width / 60;          // draw in a 60×60 space at the canvas's resolution
+    g.setTransform(k, 0, 0, k, 0, 0); g.clearRect(0, 0, 60, 60);
     drawCharacter(g, id, 30, 52, 1, t * 4, 1.3);
     raf = requestAnimationFrame(loop);
   };
@@ -484,11 +503,18 @@ function title() {
   const p = ui.openPanel('titlescreen');
   const hasSave = !!S.char;
   const status = h('p', { class: 'fine' }, 'grinding ink…');
+  let starting = false;                  // a quick double tap must not start the game twice
+  const go = async isNew => {
+    if (starting) return;
+    starting = true;
+    if (isNew && hasSave && await ui.choose('Start a new journey? Your current progress will be erased.', ['Yes, begin again', 'Cancel'])) { starting = false; return; }
+    begin(isNew);
+  };
   const btns = h('div', { class: 'btns', hidden: '' },
-    hasSave ? h('button', { class: 'primary', onclick: () => begin(false) }, 'Continue') : null,
-    h('button', { class: hasSave ? '' : 'primary', onclick: async () => { if (!hasSave || !(await ui.choose('Start a new journey? Your current progress will be erased.', ['Yes, begin again', 'Cancel']))) begin(true); } }, hasSave ? 'New journey' : 'Begin'));
-  p.append(h('div', { class: 'seal' }, '心'), h('h1', {}, C.TITLE), h('p', { class: 'sub' }, C.SUBTITLE), status, btns,
-           h('p', { class: 'fine foot' }, C.DISCLAIMER, h('br'), 'Best with sound. On iPhone: Share → Add to Home Screen for full screen.'));
+    hasSave ? h('button', { class: 'primary', onclick: () => go(false) }, 'Continue') : null,
+    h('button', { class: hasSave ? '' : 'primary', onclick: () => go(true) }, hasSave ? 'New journey' : 'Begin'));
+  p.append(h('div', { class: 'titlecard' }, h('div', { class: 'seal' }, '心'), h('h1', {}, C.TITLE), h('p', { class: 'sub' }, C.SUBTITLE), status, btns,
+           h('p', { class: 'fine foot' }, C.DISCLAIMER, h('br'), 'Best with sound. On iPhone: Share → Add to Home Screen for full screen.')));
   return { ready: () => { status.remove(); btns.hidden = false; } };
 }
 
@@ -506,9 +532,10 @@ async function begin(isNew) {
     const grid = h('div', { class: 'grid' });
     p.append(grid);                      // previews only animate once their canvas is on the page
     await new Promise(res => {
+      const pick = ui.firstTap(id => { S.char = id; res(); });
       for (const ch of C.CHARACTERS) {
-        const c = h('canvas', { width: '120', height: '120' });
-        grid.append(h('button', { class: 'charcard', onclick: () => { S.char = ch.id; res(); } }, c, h('b', {}, ch.name), h('small', {}, ch.blurb)));
+        const c = h('canvas', { width: '192', height: '192' });
+        grid.append(h('button', { class: 'charcard', onclick: () => pick(ch.id) }, c, h('b', {}, ch.name)));
         drawCharPreview(c, ch.id);
       }
     });

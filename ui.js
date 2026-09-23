@@ -14,11 +14,20 @@ export function h(tag, attrs = {}, ...kids) {
   return e;
 }
 export const wait = ms => new Promise(r => setTimeout(r, ms));
+// iOS only shows :active (pressed) styles once a touch listener exists somewhere.
+document.addEventListener('touchstart', () => {}, { passive: true });
+// A tap handler shared by a group of buttons: the first tap wins, later ones are ignored,
+// as are taps in the first moments after the buttons appear (the tail of a quick
+// double tap on whatever was there before).
+export function firstTap(fn, armMs = 250) {
+  const t0 = performance.now(); let used = false;
+  return (...a) => { if (used || performance.now() - t0 < armMs) return; used = true; fn(...a); };
+}
 
 // ---------- dialog ----------
 const layer = $('#dialog'), box = $('#dialog .box'), who = $('#dialog .who'), txt = $('#dialog .text'), opts = $('#dialog .opts');
 let advance = null;
-layer.addEventListener('pointerdown', e => { if (!e.target.closest('button') && advance) advance(); });
+layer.addEventListener('click', e => { if (!e.target.closest('button') && advance) advance(); });
 addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && advance) { e.preventDefault(); advance(); } });
 
 function typeLine(line, waitTap = true) {
@@ -46,7 +55,8 @@ export function choose(prompt, options) {
   return new Promise(async res => {
     await typeLine(prompt, false);
     opts.innerHTML = '';
-    options.forEach((o, i) => opts.append(h('button', { class: 'opt', onclick: () => { opts.innerHTML = ''; layer.hidden = true; busy--; audio.soft(); res(i); } }, o)));
+    const pick = firstTap(i => { opts.innerHTML = ''; layer.hidden = true; busy--; audio.soft(); res(i); });
+    options.forEach((o, i) => opts.append(h('button', { class: 'opt', onclick: () => pick(i) }, o)));
   });
 }
 
@@ -61,15 +71,23 @@ export function closePanel() { if (!panelEl.hidden) { panelEl.hidden = true; pan
 // A card with text + buttons inside an open panel; resolves with the button index.
 export function card(parent, title, bodyNodes, buttons) {
   return new Promise(res => {
+    const pick = firstTap(i => { c.remove(); res(i); });
     const c = h('div', { class: 'card' }, title ? h('h2', {}, title) : null, ...bodyNodes,
-      h('div', { class: 'btns' }, buttons.map((b, i) => h('button', { class: i === 0 ? 'primary' : '', onclick: () => { c.remove(); res(i); } }, b))));
+      h('div', { class: 'btns' }, buttons.map((b, i) => h('button', { class: i === 0 ? 'primary' : '', onclick: () => pick(i) }, b))));
     parent.append(c);
+    // Freeze the centring margin so opening "Learn more" grows the card downwards
+    // instead of sliding everything (and the button under your finger) upwards.
+    c.style.margin = getComputedStyle(c).marginTop + ' 0 auto';
   });
 }
 
 // "Learn more" expander used by pillar teaching and the journal.
 export function learnMore(paragraphs) {
-  return h('details', { class: 'more' }, h('summary', {}, 'Learn more'), ...paragraphs.map(p => h('p', {}, p)));
+  const body = h('div', { hidden: '' }, ...paragraphs.map(p => h('p', {}, p)));
+  const btn = h('button', { class: 'toggle', 'aria-expanded': 'false', onclick: () => {
+    body.hidden = !body.hidden; btn.setAttribute('aria-expanded', String(!body.hidden));
+  } }, 'Learn more');
+  return h('div', { class: 'more' }, btn, body);
 }
 export function verse(text, source) {
   return h('blockquote', { class: 'verse' }, ...text.split('\n').flatMap((l, i) => i ? [h('br'), l] : [l]), h('cite', {}, source));
