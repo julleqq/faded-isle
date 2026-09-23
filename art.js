@@ -68,18 +68,18 @@ export function drawCharacter(ctx, id, x, y, dir, phase, s = 1) {
     const hue = (phase * 20) % 360;                       // a hint of the colour it carries
     blob(ctx, 0, -1, 7, 1.6, `hsla(${hue},70%,60%,.6)`);
   } else if (id === 'crane') {
-    ctx.fillStyle = '#f7f3ea';
-    ctx.beginPath(); ctx.moveTo(-14, -12); ctx.lineTo(0, -8); ctx.lineTo(14, -12); ctx.lineTo(4, -2); ctx.lineTo(-4, -2); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#e9e1d0';
+    // Folded paper: each facet is filled, then outlined in ink so it reads on pale ground.
+    const facet = (pts, fill) => {
+      ctx.fillStyle = fill; ctx.beginPath(); pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.lineJoin = 'round'; ctx.globalAlpha = .85; ctx.stroke(); ctx.globalAlpha = 1;
+    };
     const flap = Math.sin(phase * 1.5) * 4;
-    ctx.beginPath(); ctx.moveTo(-3, -8); ctx.lineTo(-10, -24 - flap); ctx.lineTo(3, -9); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(3, -8); ctx.lineTo(8, -22 + flap); ctx.lineTo(-1, -9); ctx.fill();
-    ctx.fillStyle = '#f7f3ea';
-    ctx.beginPath(); ctx.moveTo(8, -6); ctx.lineTo(15, -22); ctx.lineTo(18, -20); ctx.lineTo(10, -6); ctx.fill();
-    blob(ctx, 16.5, -21, 1.8, 1.6, '#c0392b');
-    ctx.strokeStyle = INK; ctx.globalAlpha = .6; ctx.lineWidth = .8;
-    ctx.beginPath(); ctx.moveTo(-14, -12); ctx.lineTo(0, -8); ctx.lineTo(14, -12); ctx.moveTo(0, -8); ctx.lineTo(0, -3); ctx.stroke();
-    ctx.globalAlpha = 1;
+    facet([[-16, -10], [0, -6], [4, -1], [-4, -1]], '#e4ddcc');               // tail + body, shadow side
+    facet([[0, -6], [14, -10], [4, -1]], '#fbf8f1');                          // body, lit side
+    facet([[-3, -7], [-11, -25 - flap], [2, -8]], '#d9d0bd');                // far wing
+    facet([[1, -7], [9, -23 + flap], [5, -5]], '#fbf8f1');                   // near wing
+    facet([[8, -5], [15, -22], [18, -20], [11, -4]], '#f1ebdf');             // neck
+    blob(ctx, 16.5, -21.5, 1.8, 1.6, '#c0392b');                             // red crest
   }
   ctx.restore();
 }

@@ -473,13 +473,13 @@ async function begin(isNew) {
     const p = ui.openPanel('select');
     p.append(h('h2', {}, 'Who walks the island?'), h('p', { class: 'fine' }, 'You can change this later in the journal.'));
     const grid = h('div', { class: 'grid' });
+    p.append(grid);                      // previews only animate once their canvas is on the page
     await new Promise(res => {
       for (const ch of C.CHARACTERS) {
         const c = h('canvas', { width: '120', height: '120' });
         grid.append(h('button', { class: 'charcard', onclick: () => { S.char = ch.id; res(); } }, c, h('b', {}, ch.name), h('small', {}, ch.blurb)));
         drawCharPreview(c, ch.id);
       }
-      p.append(grid);
     });
     ui.closePanel();
     S.pos = null;
@@ -507,6 +507,6 @@ async function boot() {
   if ('serviceWorker' in navigator && /^https:|^http:\/\/localhost/.test(location.href) && !window.__SINGLE_FILE__)
     navigator.serviceWorker.register('sw.js').catch(() => {});
   addEventListener('pagehide', () => { if (mode === 'play') { S.pos = { x: player.x, y: player.y }; save(); saveMask(); } });
-  if (location.hash === '#debug') window.GAME = { get S() { return S; }, player, get map() { return map; }, meetGuardian, encounter, greatTree, openJournal, W };
+  if (location.hash === '#debug') window.GAME = { get S() { return S; }, player, audio, get map() { return map; }, meetGuardian, encounter, greatTree, openJournal, W };
 }
 boot();
