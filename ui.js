@@ -31,8 +31,8 @@ layer.addEventListener('click', e => { if (!e.target.closest('button') && advanc
 addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && advance) { e.preventDefault(); advance(); } });
 
 function typeLine(line, waitTap = true) {
-  // "Name: text" puts Name in the speaker tab
-  const m = line.match(/^([A-Z][\w' ,]{1,24}): (.*)$/s);
+  // "Name: text" puts Name in the speaker tab (any script: "Grande Árvore: …" works too)
+  const m = line.match(/^(\p{Lu}[\p{L}\p{M}\p{N}’' ,-]{1,24}): (.*)$/su);
   who.textContent = m ? m[1] : ''; who.hidden = !m;
   const text = m ? m[2] : line;
   txt.textContent = ''; box.classList.remove('done');

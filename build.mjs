@@ -8,7 +8,7 @@ import path from 'path';
 
 const dir = path.dirname(new URL(import.meta.url).pathname);
 const read = f => fs.readFileSync(path.join(dir, f), 'utf8');
-const ORDER = ['world.js', 'content.js', 'audio.js', 'ui.js', 'art.js', 'exercises.js', 'game.js'];
+const ORDER = ['world.js', 'content.js', 'audio.js', 'ui.js', 'art.js', 'exercises.js', 'finale.js', 'game.js'];
 const id = f => '__' + f.replace('.js', '');
 
 let js = '';

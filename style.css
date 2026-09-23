@@ -149,3 +149,12 @@ textarea { margin-bottom: 8px; resize: none; }
 .spirit canvas { width: 80px; height: 65px; }
 .note { font-style: italic; }
 .jbody h3 { font-weight: normal; margin: 18px 0 6px; }
+
+/* Choice Point results: highlighted weekly toward move, move lists */
+.hl { background: #fbeec4; border-left: 4px solid #d6a634; border-radius: 8px; padding: 10px 14px; margin: 10px 0; line-height: 1.45; }
+.hl small { display: block; font-size: 14px; color: var(--ink-soft); margin-bottom: 2px; }
+.hl b { font-weight: normal; font-size: 19px; }
+.jbody h4 { font-weight: normal; font-style: italic; margin: 14px 0 6px; font-size: 16px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tags span { border: 1.5px solid var(--ink); border-radius: 999px; padding: .3em .8em; font-size: 15px; background: var(--paper-2); }
+.tags.away span { border-style: dashed; color: var(--ink-soft); background: transparent; }
