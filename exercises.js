@@ -3,12 +3,14 @@
 
 import { h, wait, say, choose, firstTap } from './ui.js';
 import { drawCharacter, drawGuardian, drawCreature, drawEnso } from './art.js';
-import { VALUE_LANTERNS, SMALL_STEPS, CREATURES, PILLARS } from './content.js';
+import { VALUE_LANTERNS, SMALL_STEPS, CREATURES, PILLARS, valueName, valueInline, stepText } from './content.js';
 import * as audio from './audio.js';
+import { PACK, localize } from './i18n.js';
 
 // Every player-facing string of the exercises, grouped per exercise, for translation.
 // {placeholders} are filled in by fmt(); keep them whole in translated sentences.
-const TEXT = {
+// Translations: the `exercises` part of lang/fi.js and lang/pt.js.
+export const TEXT = {
   present: {
     intro: 'Breathe with the circle: in as it grows, out as it softens. Three breaths.',
     begin: 'Begin', skip: 'Skip',
@@ -25,7 +27,11 @@ const TEXT = {
   defusion: {
     intro: 'Tap a thought. Notice it as a thought, then set it on a leaf and let the stream carry it.',
     thoughts: ['I\'m not good enough', 'Something bad will happen', 'I always mess things up', 'I can\'t handle this', 'Everyone else has it figured out'],
-    having: '"I\'m having the thought that {thought}."',
+    // one whole sentence per thought above, in the same order
+    having: ['"I\'m having the thought that I\'m not good enough."', '"I\'m having the thought that something bad will happen."',
+      '"I\'m having the thought that I always mess things up."', '"I\'m having the thought that I can\'t handle this."',
+      '"I\'m having the thought that everyone else has it figured out."'],
+    havingOwn: 'I\'m having the thought: “{thought}”',       // for a thought the player writes
     own: 'Or write your own thought (optional)', leaf: 'Leaf', cont: 'Continue',
     outro: ['Ripple: "Did the thoughts disappear? No. They floated. You watched them instead of being them."',
             'Ripple: "A thought is a leaf, not the river. You are the one on the bank."'],
@@ -59,10 +65,11 @@ const TEXT = {
     push: 'Pushing the weather doesn\'t clear the sky. It only swells. Try noticing it instead.',
     storm: 'A storm rolls in: so much at once. Keep noticing, one piece at a time. Behind it, the sky has not changed.',
     calm: 'The storm moves on. The sky is exactly as it was.',
-    done: 'Ten pieces of weather came and went. The sky held every one of them.',
+    done: '{n} pieces of weather came and went. The sky held every one of them.',
     count: 'noticed {n} of {total}',
-    labels: ['a thought', 'a feeling', 'a body sensation', 'a memory', 'an urge'],
-    // [look, what it carries]
+    labels: ['a thought', 'a feeling', 'a body sensation', 'a memory', 'an urge'],     // the naming buttons
+    labelsInline: ['a thought', 'a feeling', 'a body sensation', 'a memory', 'an urge'], // {label} in `named`
+    // [look, what it carries]. The look (cloud, storm, rain, sun, fog, wind) picks the picture: keep it in English.
     weather: [['cloud', '"I\'m a failure"'], ['storm', 'anger'], ['rain', 'sadness'], ['sun', 'a flicker of joy'],
       ['fog', 'a tight chest'], ['wind', 'the urge to run'], ['cloud', 'a childhood summer'], ['cloud', '"What if they leave?"'],
       ['storm', 'frustration'], ['fog', 'a knot in the stomach'], ['wind', 'the urge to check your phone'], ['rain', 'an old goodbye'],
@@ -88,7 +95,7 @@ const TEXT = {
   action: {
     choose: 'Choose one value to walk toward.',
     chooseMine: 'Choose one value to walk toward. Your own lanterns come first.',
-    stone: 'Stone {n}. What is one small step toward {value}?',
+    stone: 'Stone {n}. What is one small step toward {value}?',   // {value}: VALUE_INLINE in content.js
     last: 'Last stone. Write one small step of your own toward {value}: something you could really do.',
     placeholder: 'My small step…', step: 'Step',
     cant: '{name} appears: "What if you fail? Wait until you feel ready."',
@@ -99,6 +106,8 @@ const TEXT = {
             'Leap: "That is committed action: one small step, then the next, toward what matters, with whatever comes along."'],
   },
 };
+
+localize(TEXT, PACK.exercises, 'exercises');
 
 const INK = '#1d1b19';
 const SERIF = '"Iowan Old Style", Palatino, Georgia, serif';
@@ -151,6 +160,13 @@ function stage(p, title, cls = '') {
     cv, ctl,
     draw(f) { draw = f; },
     msg(t) { msg.textContent = t; },
+    // Hold the message line at the height of the longest text it will show, so the
+    // buttons below never move (translations are often longer than the English).
+    reserve(texts) {
+      const now = msg.textContent; let hh = 0;
+      for (const t of texts) { msg.textContent = t; hh = Math.max(hh, msg.offsetHeight); }
+      msg.textContent = now; if (hh) msg.style.minHeight = hh + 'px';
+    },
     stop() { cancelAnimationFrame(raf); },
     set(...nodes) { ctl.replaceChildren(...nodes); },
     pt(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; },
@@ -178,6 +194,35 @@ function label(g, text, x, y, font, align = 'center') {       // ink text with a
   g.strokeStyle = 'rgba(247,242,231,.85)'; g.lineWidth = 4; g.strokeText(text, x, y);
   g.fillStyle = INK; g.fillText(text, x, y);
 }
+// A centred label kept wholly inside the canvas (shrunk if it is wider than the canvas),
+// fading in and out as its anchor x crosses the left/right edges.
+function edgeLabel(g, text, x, y, px, style, W) {
+  g.font = `${style} ${px}px ${SERIF}`;
+  let w = g.measureText(text).width;
+  if (w > W - 12) { px = Math.max(9, Math.floor(px * (W - 12) / w)); g.font = `${style} ${px}px ${SERIF}`; w = g.measureText(text).width; }
+  const a0 = g.globalAlpha;
+  g.globalAlpha = a0 * clamp((Math.min(x, W - x) + 30) / 40, 0, 1);
+  label(g, text, clamp(x, w / 2 + 6, W - w / 2 - 6), y, `${style} ${px}px ${SERIF}`);
+  g.globalAlpha = a0;
+}
+// A label under a lantern: breaks onto two lines, or shrinks, to stay within maxW.
+function fitLabel(g, text, x, y, maxW, px) {
+  g.font = px + 'px ' + SERIF;
+  if (g.measureText(text).width <= maxW) return g.fillText(text, x, y);
+  const words = text.split(' ');
+  if (words.length > 1) {
+    let best = null;
+    for (let i = 1; i < words.length; i++) {
+      const l = [words.slice(0, i).join(' '), words.slice(i).join(' ')], w = Math.max(...l.map(s => g.measureText(s).width));
+      if (!best || w < best.w) best = { l, w };
+    }
+    if (best.w > maxW) { px = Math.max(10, Math.floor(px * maxW / best.w)); g.font = px + 'px ' + SERIF; }
+    best.l.forEach((s, i) => g.fillText(s, x, y + i * (px + 2)));
+    return;
+  }
+  g.font = Math.max(10, Math.floor(px * maxW / g.measureText(text).width)) + 'px ' + SERIF;
+  g.fillText(text, x, y);
+}
 
 // ---------- Present Moment: breathe with the orb, then notice ----------
 async function present(p, S) {
@@ -197,6 +242,7 @@ async function present(p, S) {
     g.fillStyle = INK; g.font = '20px ' + SERIF; g.textAlign = 'center'; g.fillText(word, W / 2, H / 2 + 7);
   });
   st.msg(T.intro);
+  st.reserve([T.intro, fmt(T.breath, { n: 3 }), T.notice, fmt(T.count, { n: 3 }), T.enough]);
   if (await st.buttons([T.begin, T.skip]) === 1) skip = true;
   const skipBtn = h('button', { onclick: firstTap(() => { skip = true; skipBtn.disabled = true; }) }, T.skip);
   st.set(skipBtn);
@@ -249,26 +295,36 @@ async function defusion(p, S) {
       g.save(); g.globalAlpha = a; g.translate(l.x, y); g.rotate(Math.sin(t + l.seed) * .3);
       g.fillStyle = l.color; g.beginPath(); g.ellipse(0, 0, 16, 9, 0, 0, Math.PI * 2); g.fill();
       g.strokeStyle = INK; g.lineWidth = 1; g.beginPath(); g.moveTo(-14, 0); g.lineTo(14, 0); g.stroke();
-      g.rotate(-Math.sin(t + l.seed) * .3);
-      g.fillStyle = INK; g.font = 'italic 13px ' + SERIF; g.textAlign = 'center'; g.fillText(l.text, 0, -16);
       g.restore();
+      g.globalAlpha = a * clamp((l.x + 60) / 40, 0, 1);                   // a queued leaf's label waits off-canvas
+      g.fillStyle = INK; g.font = 'italic 13px ' + SERIF; g.textAlign = 'center';
+      const tw = Math.min(g.measureText(l.text).width, W - 12);                // the whole thought stays on the canvas
+      g.fillText(l.text, clamp(l.x, tw / 2 + 6, W - tw / 2 - 6), y - 16, W - 12); g.globalAlpha = 1;
     }
     drawGuardian(g, 'defusion', W * .15, H * .62, t, true, PILLARS.defusion.color);
   });
   st.msg(T.intro);
+  st.reserve([T.intro, ...T.having, fmt(T.havingOwn, { thought: 'mmmmmmm mmmmmmm mmmmmmm mmmmmmm mmmmm' })]);
   let placed = 0;
   await new Promise(res => {
     const go = h('button', { class: 'primary', disabled: '', onclick: firstTap(() => { go.classList.add('on'); audio.soft(); res(); }) }, T.cont);
-    const place = text => {
-      const lower = /^I\b/.test(text) ? text : text.charAt(0).toLowerCase() + text.slice(1);
-      st.msg(fmt(T.having, { thought: lower }));
-      leaves.push({ text, x: -20, y: [.4, .56, .7][placed % 3], seed: Math.random() * 9, color: ['#d9823b', '#c4552f', '#e0a53c'][placed % 3] });   // lanes, so labels don't overlap
+    const place = (text, sentence) => {
+      st.msg(sentence);
+      // three lanes, so labels don't overlap: the new leaf takes the lane with the most room,
+      // and if even that lane is busy it waits upstream, a label's width behind the last leaf
+      const g = st.cv.getContext('2d'); g.font = 'italic 13px ' + SERIF;
+      const w = g.measureText(text).width;
+      const last = y => leaves.filter(l => l.y === y).sort((p, q) => p.x - q.x)[0];
+      const room = y => (last(y) ? last(y).x : Infinity);
+      const lane = [.4, .56, .7].sort((a, b) => room(b) - room(a))[0], prev = last(lane);
+      const x = prev ? Math.min(-20, prev.x - w - prev.w / 2 - 34) : -20;
+      leaves.push({ text, w, x, y: lane, seed: Math.random() * 9, color: ['#d9823b', '#c4552f', '#e0a53c'][placed % 3] });
       placed++; audio.soft();
       if (placed >= 3) go.disabled = false;
     };
-    const chips = T.thoughts.map(t => { const b = h('button', { class: 'chip', onclick: firstTap(() => { b.disabled = true; place(t); }) }, t); return b; });
+    const chips = T.thoughts.map((t, i) => { const b = h('button', { class: 'chip', onclick: firstTap(() => { b.disabled = true; place(t, T.having[i] || fmt(T.havingOwn, { thought: t })); }) }, t); return b; });
     const input = h('input', { type: 'text', maxlength: '40', placeholder: T.own, enterkeyhint: 'done' });
-    const own = h('form', { class: 'own', onsubmit: e => { e.preventDefault(); if (input.value.trim()) { place(input.value.trim()); input.value = ''; input.blur(); } } },
+    const own = h('form', { class: 'own', onsubmit: e => { e.preventDefault(); const v = input.value.trim(); if (v) { place(v, fmt(T.havingOwn, { thought: v })); input.value = ''; input.blur(); } } },
       input, h('button', { type: 'submit' }, T.leaf));
     st.set(h('div', { class: 'chips' }, chips), go, own);
   });
@@ -388,6 +444,7 @@ async function acceptance(p, S) {
   const runWave = onhit => new Promise(res => { wave = { y: 0, dir: 1, hit: false, onhit, res }; st.msg(phase2 ? T.coming2 : T.coming); audio.soft(); });
 
   st.msg(T.explore);
+  st.reserve([T.explore, T.coming, T.into, T.away, T.side, T.still, T.stay, T.coming2, ...T.calm, T.moved]);
   await wait(3000);
   const tried = new Set();
   for (let i = 0; i < 3; i++) { tried.add(await runWave(o => st.msg(T[o]))); await wait(1500); }
@@ -451,8 +508,8 @@ async function selfctx(p, S) {
     for (const it of items) {                                  // words on top, so they stay readable in a storm
       const y = yOf(it);
       g.globalAlpha = it.fade;
-      label(g, it.text, it.x, y + 32 * it.swell, 'italic 13px ' + SERIF);
-      if (it.name) label(g, it.name, it.x, y - 26, 'bold 13px ' + SERIF);
+      edgeLabel(g, it.text, it.x, y + 32 * it.swell, 13, 'italic', W);
+      if (it.name) edgeLabel(g, it.name, it.x, y - 26, 13, 'bold', W);
       g.globalAlpha = 1;
       if (it === sel) { g.strokeStyle = INK; g.lineWidth = 2; g.setLineDash([5, 5]); g.beginPath(); g.arc(it.x, y + 4, 36 * it.swell, 0, 7); g.stroke(); g.setLineDash([]); }
     }
@@ -475,7 +532,7 @@ async function selfctx(p, S) {
     const it = sel; pick(null);
     b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 350);
     it.name = T.labels[i]; it.v = Math.max(it.v, 26) * 1.4; noticed++; audio.bell(587, .05);
-    st.msg(fmt(T.named, { label: it.name, item: it.text }));
+    st.msg(fmt(T.named, { label: T.labelsInline[i] || it.name, item: it.text }));
     const turn = (m, text) => { mood = m; setTimeout(() => { if (!sel && noticed < GOAL) st.msg(text); }, 1600); };
     if (noticed === 3) { turn('storm', T.storm); burst = 3; thunderAt = now + 1; }
     if (noticed === 7) turn('calm', T.calm);
@@ -505,9 +562,11 @@ async function selfctx(p, S) {
   st.cv.addEventListener('pointerup', up); st.cv.addEventListener('pointercancel', up);
 
   st.msg(T.intro);
+  st.reserve([T.intro, T.push, T.storm, T.calm, fmt(T.done, { n: GOAL }), ...T.weather.flatMap(([, item]) =>
+    [fmt(T.pick, { item }), ...T.labels.map((l, i) => fmt(T.named, { label: T.labelsInline[i] || l, item }))])]);
   st.set(h('div', { class: 'labels' }, btns));
   await done;
-  st.msg(T.done);
+  st.msg(fmt(T.done, { n: GOAL }));
   await wait(2600);
   st.stop();
   const i = await choose(T.question, T.answers);
@@ -541,12 +600,13 @@ async function values(p, S) {
       if (lit) { const gl = g.createRadialGradient(x, y, 2, x, y, 50); gl.addColorStop(0, 'rgba(255,210,110,.7)'); gl.addColorStop(1, 'rgba(255,210,110,0)'); g.fillStyle = gl; g.beginPath(); g.arc(x, y, 50, 0, 7); g.fill(); }
       g.fillStyle = lit ? '#f6c24a' : '#8d8676'; g.beginPath(); g.ellipse(x, y, 13, 17, 0, 0, 7); g.fill();
       g.strokeStyle = INK; g.lineWidth = 1; g.beginPath(); g.moveTo(x - 13, y); g.lineTo(x + 13, y); g.stroke();
-      g.fillStyle = '#f7efe3'; g.font = '14px ' + SERIF; g.textAlign = 'center'; g.fillText(v, x, y + 34);
+      g.fillStyle = '#f7efe3'; g.textAlign = 'center'; fitLabel(g, valueName(v), x, y + 34, W / (chosen.length + 1) - 10, 14);
     });
     if (lit) lit = Math.min(1, lit + .004);
     drawGuardian(g, 'values', W * .12, H * .97, t, true, PILLARS.values.color);
   });
   st.msg(T.intro);
+  st.reserve([T.intro, T.max, T.rise]);
   let go;
   await new Promise(res => {
     const armed = performance.now() + 250;                 // ignore the tail of the tap that closed the dialog
@@ -558,7 +618,7 @@ async function values(p, S) {
       else if (chosen.length < 3) { chosen.push(v); b.classList.add('on'); audio.soft(); st.msg(T.intro); }
       else st.msg(T.max);
       go.disabled = !chosen.length; go.textContent = T.light[chosen.length];
-    } }, v));
+    } }, valueName(v)));
     st.set(go, h('div', { class: 'chips' }, chips));
   });
   lit = 0.01; audio.chime();
@@ -592,7 +652,7 @@ async function action(p, S) {
     const glow = g.createRadialGradient(W / 2, 22, 2, W / 2, 22, 40); glow.addColorStop(0, 'rgba(255,210,110,.8)'); glow.addColorStop(1, 'rgba(255,210,110,0)');
     g.fillStyle = glow; g.beginPath(); g.arc(W / 2, 22, 40, 0, 7); g.fill();
     g.fillStyle = '#f6c24a'; g.beginPath(); g.ellipse(W / 2, 20, 8, 11, 0, 0, 7); g.fill();
-    if (value) label(g, value, W / 2 + 16, 26, '15px ' + SERIF, 'left');
+    if (value) { g.font = '15px ' + SERIF; label(g, valueName(value), Math.min(W / 2 + 16, W - 8 - g.measureText(valueName(value)).width), 26, '15px ' + SERIF, 'left'); }
     // player position (0 = near shore, STONES+1 = far shore)
     const px = k => k === 0 ? W / 2 : k > STONES ? W / 2 : sx(k - 1), py = k => k === 0 ? H - 16 : k > STONES ? 36 : sy(k - 1) + 4;
     const from = Math.max(0, pos - 1), e = ease(Math.min(1, hopT));
@@ -606,16 +666,20 @@ async function action(p, S) {
   const mine = (S.values || []).filter(v => VALUE_LANTERNS.includes(v));
   const all = [...mine, ...VALUE_LANTERNS.filter(v => !mine.includes(v))];
   st.msg(mine.length ? T.chooseMine : T.choose);
-  value = all[await st.buttons(all, i => i < mine.length ? 'chip mine' : 'chip', 'chips')];
+  const suggested = [...new Set(Object.values(SMALL_STEPS).flat())];
+  st.reserve([T.choose, T.chooseMine, fmt(T.cant, { name: cant.name }), T.waited,
+    ...VALUE_LANTERNS.flatMap(v => [fmt(T.stone, { n: 2, value: valueInline(v) }), fmt(T.last, { value: valueInline(v) })]),
+    ...[...suggested.map(stepText), 'Mmmmmmm mmmmm mmmmm mmmmmmm mmmm mmmmmmm'].map(step => fmt(T.stepped, { step }))]);
+  value = all[await st.buttons(all.map(valueName), i => i < mine.length ? 'chip mine' : 'chip', 'chips')];
   audio.bell(523, .06);
   await wait(500);
-  const v = value.toLowerCase(), steps = [];
+  const v = valueInline(value), steps = [];
   for (let i = 0; i < STONES; i++) {
     let step;
     if (i < STONES - 1) {
       st.msg(fmt(T.stone, { n: i + 1, value: v }));
       const pool = [...(SMALL_STEPS[value] || []), ...SMALL_STEPS.default].filter(s => !steps.includes(s)).slice(0, 3);
-      step = pool[await st.buttons(pool, () => '')];
+      step = pool[await st.buttons(pool.map(stepText), () => '')];
     } else {
       st.msg(fmt(T.last, { value: v }));
       step = await new Promise(res => {
@@ -635,7 +699,7 @@ async function action(p, S) {
     st.msg(fmt(T.cant, { name: cant.name }));
     while (await st.buttons([T.go, T.wait]) === 1) st.msg(T.waited);
     pos++; hopT = 0; audio.bell(440 + i * 50, .06);
-    st.msg(fmt(T.stepped, { step }));
+    st.msg(fmt(T.stepped, { step: stepText(step) }));
     await wait(1400);
   }
   pos++; hopT = 0; await wait(1200);

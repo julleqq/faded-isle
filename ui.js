@@ -1,6 +1,7 @@
 // Tiny UI toolkit: Pokémon-style dialog box, choices, full-screen panels, toasts.
 
 import * as audio from './audio.js';
+import { UI } from './content.js';
 
 const $ = s => document.querySelector(s);
 export function h(tag, attrs = {}, ...kids) {
@@ -86,7 +87,7 @@ export function learnMore(paragraphs) {
   const body = h('div', { hidden: '' }, ...paragraphs.map(p => h('p', {}, p)));
   const btn = h('button', { class: 'toggle', 'aria-expanded': 'false', onclick: () => {
     body.hidden = !body.hidden; btn.setAttribute('aria-expanded', String(!body.hidden));
-  } }, 'Learn more');
+  } }, UI.learnMore);
   return h('div', { class: 'more' }, btn, body);
 }
 export function verse(text, source) {

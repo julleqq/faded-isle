@@ -1,5 +1,6 @@
-// All of the game's words live here, so iterating on the writing never
-// requires touching game logic. Edit freely.
+// All of the game's English words live here, so iterating on the writing never
+// requires touching game logic. Edit freely. Translations: lang/fi.js, lang/pt.js
+// (same keys; see i18n.js). The bottom of this file applies the chosen language.
 //
 // A note on the Rumi lines: they are loose renderings in my own words of
 // passages from Rumi's Masnavi, not direct translations. Many popular
@@ -7,8 +8,10 @@
 // versions, so these stay close to images that are genuinely his.
 // Swap in your favourite translation any time.
 
-export const TITLE = 'The Faded Isle';
-export const SUBTITLE = 'a quiet journey through the six pillars of acceptance & commitment therapy';
+import { PACK, localize, phrasebook, clone } from './i18n.js';
+
+export let TITLE = 'The Faded Isle';
+export let SUBTITLE = 'a quiet journey through the six pillars of acceptance & commitment therapy';
 
 export const CHARACTERS = [
   { id: 'monk',  name: 'Wandering Monk', blurb: 'Robed, slow, and patient as a stone.' },
@@ -220,8 +223,14 @@ export const VALUE_LANTERNS = [
   'Honesty', 'Play', 'Growth', 'Nature', 'Calm', 'Adventure',
   'Family', 'Learning', 'Fairness', 'Beauty', 'Self-care', 'Contribution',
 ];
+// The English names above are also the ids saved in a journey. What the player sees:
+export const VALUE_NAMES = Object.fromEntries(VALUE_LANTERNS.map(v => [v, v]));
+// The form used inside the stepping-stone sentences ("one small step toward {value}").
+// Other languages can inflect it here (e.g. Finnish partitive, Portuguese "à"/"ao").
+export const VALUE_INLINE = Object.fromEntries(VALUE_LANTERNS.map(v => [v, v.toLowerCase()]));
 
 // Small committed steps offered at the stepping stones, per value.
+// The English text is saved as the step's id; stepText() shows it in the chosen language.
 export const SMALL_STEPS = {
   default: ['Send one kind message', 'Take a ten-minute walk', 'Write one sentence', 'Ask one honest question', 'Rest without guilt for five minutes'],
   Kindness: ['Say something kind to someone today', 'Speak to yourself like a friend once today'],
@@ -273,4 +282,77 @@ export const SIGN = [
 // While formId is empty, the feedback buttons are hidden.
 export const FEEDBACK = { formId: '', textEntry: '', contextEntry: '' };
 
-export const DISCLAIMER = 'A reflective game, not a substitute for therapy.';
+export let DISCLAIMER = 'A reflective game, not a substitute for therapy.';
+
+// Words of the interface itself (title screen, journal, encounters, buttons, messages).
+export const UI = {
+  loading: 'grinding ink…',
+  begin: 'Begin', continue: 'Continue', newJourney: 'New journey', cancel: 'Cancel',
+  newJourneyConfirm: 'Start a new journey? Your current progress will be erased.',
+  newJourneyYes: 'Yes, begin again',
+  titleFoot: 'Best with sound. On iPhone: Share → Add to Home Screen for full screen.',
+  language: 'Language',
+  whoWalks: 'Who walks the island?',
+  changeLater: 'You can change this later in the journal.',
+  act: { meet: 'Meet', read: 'Read', touch: 'Touch' },        // the round action button
+  aria: { pills: 'Pillars learned', sound: 'Sound', journal: 'Journal' },
+  // meeting a guardian again ({name} = the part of the guardian's name before the comma)
+  welcomeBack: '{name}: "Welcome back, friend."',
+  practiceAgain: 'Practice again', hearVerse: 'Hear their verse', goodbye: 'Goodbye',
+  learnedMove: 'You learned a new way to meet the wild spirits: “{move}”.',
+  sixDone: ['A deep hum rises from the heart of the island.', 'The Great Tree is stirring. Return to the centre.'],
+  verseAdded: 'A verse was added to your journal',
+  learnMore: 'Learn more',
+  // encounters
+  struggle: 'struggle',
+  softens: ' It softens noticeably.',
+  tip: '  (Fighting what we feel tends to make it bigger. ACT calls this the struggle switch.)',
+  metAgain: '{name} again. You have met before.',
+  wild: 'A wild {name} drifts out of the grey grass.',
+  walkOn: 'Walk on',
+  friend: 'The struggle eases. {name} is still here, but it no longer pulls at you. It walks beside you now.',
+  addedJournal: 'Added to your journal.',
+  tired: 'The tug-of-war is exhausting. You let go of the rope for now, and {name} drifts back into the grass. Nobody wins a tug-of-war with their own mind.',
+  left: 'You leave {name} be. It will be back sometime, and that\'s all right.',
+  // journal
+  journal: 'Journal', close: 'Close',
+  tabs: { pillars: 'Pillars', spirits: 'Spirits', verses: 'Verses', you: 'You' },
+  pillarsIntro: 'The six pillars of ACT together build psychological flexibility: being open, aware, and engaged in what matters.',
+  notLearned: 'Not yet learned. Seek {guardian} at {region}.',   // also {short}: the guardian's short name
+  spiritsCount: '{n} of {total} spirits walk beside you.',
+  unknownSpirit: '???', unmetLore: 'Wanders the grey grass.',
+  noVerses: 'Verses gather here as you meet the spirits and read the old stones.',
+  versesNote: 'Verses are loose renderings after Rumi (Jalāl al-Dīn Rūmī, 1207–1273), not direct translations.',
+  traveller: 'Traveller',
+  yourLanterns: 'Your lanterns', noLanterns: 'Not yet chosen. They wait at the Lantern Summit.',
+  yourSteps: 'Your small steps', noSteps: 'Not yet taken. The stepping stones are in the east.',
+  listSep: ' · ',
+  quote: '“{text}”',
+  share: 'Share this game', feedback: 'Leave feedback', startOver: 'Start over',
+  startOverConfirm: 'Start over? This erases your progress on this device.',
+  startOverYes: 'Yes, start over', startOverNo: 'Keep my journey',
+  staysHere: 'Everything you write stays on this device.',
+  // feedback form
+  fbPlaceholder: 'How did it feel? A moment that stayed with you? One thing you would change?',
+  fbIntro: 'Your words go straight to the person who made this island. No account needed.',
+  fbAnon: 'Anonymous. Please don’t include private details.',
+  send: 'Send',
+  fbThanks: 'Thank you. Your words were sent.',
+  fbFail: 'Couldn’t send. Try again when you’re online.',
+  // sharing
+  shareText: 'A quiet little game about the six pillars of Acceptance & Commitment Therapy.',
+  linkCopied: 'Link copied',
+  copyManually: 'Copy the address from your browser to share',
+};
+
+// ---------- the chosen language ----------
+const L = PACK.content || {};
+const STEPS_SHOWN = clone(SMALL_STEPS);                        // SMALL_STEPS itself keeps the English ids
+const text = localize({ TITLE, SUBTITLE, DISCLAIMER, CHARACTERS, INTRO, PILLARS, MOVES, STRUGGLE_MOVES, CREATURES,
+  VERSES, VALUE_NAMES, VALUE_INLINE, SMALL_STEPS: STEPS_SHOWN, TREE, SIGN, UI }, L, 'content');
+const STEP_BOOK = phrasebook(SMALL_STEPS, STEPS_SHOWN);
+TITLE = text.TITLE; SUBTITLE = text.SUBTITLE; DISCLAIMER = text.DISCLAIMER;
+
+export const valueName = id => VALUE_NAMES[id] || id;           // saved ids -> shown names
+export const valueInline = id => VALUE_INLINE[id] || valueName(id);
+export const stepText = s => STEP_BOOK.get(s) ?? s;             // a player's own step stays as written

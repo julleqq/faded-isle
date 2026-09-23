@@ -8,8 +8,9 @@ import path from 'path';
 
 const dir = path.dirname(new URL(import.meta.url).pathname);
 const read = f => fs.readFileSync(path.join(dir, f), 'utf8');
-const ORDER = ['world.js', 'content.js', 'audio.js', 'ui.js', 'art.js', 'exercises.js', 'finale.js', 'game.js'];
-const id = f => '__' + f.replace('.js', '');
+// Dependencies first. Languages: lang/<code>.js before i18n.js, which comes before content.js.
+const ORDER = ['world.js', 'lang/fi.js', 'lang/pt.js', 'i18n.js', 'content.js', 'audio.js', 'ui.js', 'art.js', 'exercises.js', 'finale.js', 'game.js'];
+const id = f => '__' + f.replace(/\.js$/, '').replace(/[^\w]/g, '_');     // 'lang/fi.js' -> __lang_fi
 
 let js = '';
 for (const f of ORDER) {
@@ -17,8 +18,8 @@ for (const f of ORDER) {
   const names = [...src.matchAll(/^export\s+(?:async\s+)?(?:const|let|function)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]);
   src = src
     .replace(/^export\s+/gm, '')
-    .replace(/^import \* as (\w+) from '\.\/(\w+)\.js';$/gm, (_, n, m) => `const ${n} = __${m};`)
-    .replace(/^import \{([^}]+)\} from '\.\/(\w+)\.js';$/gm, (_, n, m) => `const {${n}} = __${m};`);
+    .replace(/^import \* as (\w+) from '\.\/([\w/]+\.js)';$/gm, (_, n, m) => `const ${n} = ${id(m)};`)
+    .replace(/^import \{([^}]+)\} from '\.\/([\w/]+\.js)';$/gm, (_, n, m) => `const {${n}} = ${id(m)};`);
   if (/^import /m.test(src)) throw new Error(`unhandled import in ${f}`);
   js += `const ${id(f)} = (() => {\n${src}\nreturn { ${names.map(n => `get ${n}() { return ${n}; }`).join(', ')} };\n})();\n`;
 }

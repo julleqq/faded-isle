@@ -47,15 +47,16 @@ button.quiet { border-style: dashed; background: transparent; box-shadow: none; 
 
 #act {
   position: fixed; right: 20px; bottom: calc(var(--safe-b) + 28px); width: 76px; height: 76px; border-radius: 50%;
-  padding: 0; font-size: 17px; background: var(--ink); color: var(--paper-2); border: 3px solid var(--paper-2);
+  padding: 0 4px; font-size: 17px; line-height: 1.1; background: var(--ink); color: var(--paper-2); border: 3px solid var(--paper-2);
   box-shadow: 0 0 0 2px var(--ink), 3px 5px 0 rgba(0, 0, 0, .2);
 }
 
 #toast {
   position: fixed; left: 50%; top: calc(var(--safe-t) + 70px); transform: translateX(-50%); pointer-events: none;
   font-size: 22px; letter-spacing: .06em; color: var(--ink); background: rgba(247, 242, 231, .92); padding: 6px 20px;
-  border-radius: 999px; box-shadow: 0 0 18px 6px rgba(247, 242, 231, .7);
-  opacity: 0; transition: opacity .8s; white-space: nowrap; font-style: italic; z-index: 10;
+  border-radius: 22px; box-shadow: 0 0 18px 6px rgba(247, 242, 231, .7);
+  opacity: 0; transition: opacity .8s; font-style: italic; z-index: 10;
+  width: max-content; max-width: calc(100vw - 32px); text-align: center; line-height: 1.3; text-wrap: balance;
 }
 #toast.show { opacity: 1; }
 
@@ -121,11 +122,19 @@ textarea { margin-bottom: 8px; resize: none; }
 #panel.titlescreen { background: rgba(239, 231, 214, .45); justify-content: center; text-align: center; }
 #panel > .titlecard { max-width: 400px; margin: auto 0; padding: 26px 20px 18px; border-radius: 22px;
   background: rgba(247, 242, 231, .93); box-shadow: 0 0 40px 18px rgba(247, 242, 231, .75); }
-.titlescreen h1 { font-weight: normal; font-size: 40px; letter-spacing: .06em; margin: 12px 0 8px; }
+.titlescreen h1 { font-weight: normal; font-size: clamp(30px, 9vw, 40px); letter-spacing: .06em; margin: 12px 0 8px; line-height: 1.15; }
 .titlescreen .sub { font-style: italic; font-size: 17px; line-height: 1.4; margin: 0 auto 26px; max-width: 320px; }
 .titlescreen .btns { flex-direction: column; align-items: center; }
 .titlescreen .btns button { min-width: 200px; }
 .titlescreen .foot { margin: 30px 0 0; }
+/* Language switch: EN · FI · PT on the title card, full names in the journal */
+.langs { display: flex; justify-content: center; margin: -8px auto 14px; width: max-content; max-width: 100%; border: 1.5px solid var(--ink); border-radius: 999px; overflow: hidden; background: var(--paper-2); }
+.langs button { border: 0; border-radius: 0; box-shadow: none; background: transparent; min-width: 56px; min-height: 44px; padding: .45em .9em; font-size: 15px; letter-spacing: .08em; }
+.langs button + button { border-left: 1.5px solid var(--ink); }
+.langs button.on { background: var(--ink); color: var(--paper-2); }
+.langs button:active { transform: none; }
+.langs.full { margin: 0 0 6px; }
+.langs.full button { letter-spacing: 0; min-width: 0; padding: .45em .8em; }
 .seal { width: 64px; height: 64px; margin: 0 auto; background: var(--seal); color: var(--paper-2); font-size: 40px; line-height: 64px; border-radius: 10px; transform: rotate(-4deg); box-shadow: 2px 3px 0 rgba(0, 0, 0, .15); }
 
 /* Character select & journal grids */

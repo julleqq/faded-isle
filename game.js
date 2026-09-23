@@ -9,8 +9,11 @@ import { h } from './ui.js';
 import * as audio from './audio.js';
 import { drawCharacter, drawGuardian, drawCreature } from './art.js';
 import { EXERCISES } from './exercises.js';
+import * as EX from './exercises.js';
 import * as FIN from './finale.js';
-const FT = FIN.TEXT;
+import { LANGS, lang, setLang, fmt } from './i18n.js';
+import * as I18N from './i18n.js';
+const FT = FIN.TEXT, U = C.UI;
 
 const SAVE_KEY = 'fadedisle.v1', MASK_KEY = 'fadedisle.mask';
 const MS = 8;                       // reveal mask is 1/8 of world resolution
@@ -61,11 +64,11 @@ const player = { x: W.START.x, y: W.START.y, dir: 1, phase: 0, moving: false };
 const cam = { x: SIZE / 2, y: SIZE / 2 };
 const center = k => ({ x: W.SHRINES[k].x * TILE + 16, y: W.SHRINES[k].y * TILE + 16 });
 const interactables = [
-  { ...center('values'), label: FT.plantAct, r: 230, when: () => procession && S.finaleGathered && !ceremony, run: () => plantLantern() },
-  ...C.PILLAR_ORDER.map(k => ({ ...center(k), label: 'Meet', r: 64, run: () => meetGuardian(k) })),
-  ...W.VERSE_STONES.map((v, i) => ({ x: v.x * TILE + 16, y: v.y * TILE + 16, label: 'Read', r: 56, run: () => readVerse(i) })),
-  { x: W.SIGNPOST.x * TILE + 16, y: W.SIGNPOST.y * TILE + 16, label: 'Read', r: 56, run: () => ui.say(C.SIGN) },
-  { x: 40 * TILE, y: 40 * TILE, label: 'Touch', r: 90, run: () => greatTree() },
+  { ...center('values'), id: 'plant', label: FT.plantAct, r: 230, when: () => procession && S.finaleGathered && !ceremony, run: () => plantLantern() },
+  ...C.PILLAR_ORDER.map(k => ({ ...center(k), id: 'meet', label: U.act.meet, r: 64, run: () => meetGuardian(k) })),
+  ...W.VERSE_STONES.map((v, i) => ({ x: v.x * TILE + 16, y: v.y * TILE + 16, id: 'read', label: U.act.read, r: 56, run: () => readVerse(i) })),
+  { x: W.SIGNPOST.x * TILE + 16, y: W.SIGNPOST.y * TILE + 16, id: 'read', label: U.act.read, r: 56, run: () => ui.say(C.SIGN) },
+  { x: 40 * TILE, y: 40 * TILE, id: 'touch', label: U.act.touch, r: 90, run: () => greatTree() },
 ];
 let near = null;
 const blooms = [];               // expanding colour animations
@@ -235,7 +238,8 @@ function frame(now) {
 const actBtn = $('#act'); let actLabel = null;
 function setAct(label) {                 // touch the DOM only when the label changes, not every frame
   if (label === actLabel) return;
-  actLabel = label; actBtn.hidden = !label; if (label) actBtn.textContent = label;
+  actLabel = label; actBtn.hidden = !label;
+  if (label) { actBtn.textContent = label; actBtn.style.fontSize = label.length > 7 ? '14px' : ''; }
 }
 let acting = false;
 async function interact() {
@@ -257,7 +261,7 @@ async function meetGuardian(k) {
 async function meet(k) {
   const P = C.PILLARS[k], short = P.guardian.split(',')[0], again = !!S.done[k];
   if (again) {
-    const i = await ui.choose(`${short}: "Welcome back, friend."`, ['Practice again', 'Hear their verse', 'Goodbye']);
+    const i = await ui.choose(fmt(U.welcomeBack, { name: short }), [U.practiceAgain, U.hearVerse, U.goodbye]);
     if (i === 1) return ui.say([`${P.rumi.replace('\n', ' ')}  (${P.rumiSource})`]);
     if (i === 2) return;
   } else await ui.say(P.greet);
@@ -270,20 +274,20 @@ async function meet(k) {
     h('p', {}, P.plain),
     ui.learnMore(P.more),
     ui.verse(P.rumi, P.rumiSource),
-    again ? null : h('p', { class: 'learned' }, `You learned a new way to meet the wild spirits: “${C.MOVES[P.move].name}”.`),
-  ], ['Continue']);
+    again ? null : h('p', { class: 'learned' }, fmt(U.learnedMove, { move: C.MOVES[P.move].name })),
+  ], [U.continue]);
   ui.closePanel();
   if (again) { save(); return; }
   S.done[k] = true; save(); updateHud();
   const c = center(k);
   bloom(c.x, c.y, 11 * TILE, 3);
-  if (doneCount() === 6) await ui.say(['A deep hum rises from the heart of the island.', 'The Great Tree is stirring. Return to the centre.']);
+  if (doneCount() === 6) await ui.say(U.sixDone);
 }
 
 async function readVerse(i) {
   const v = C.VERSES[i];
   await ui.say([v.text.replace(/\n/g, ' '), `(${v.source})`]);
-  if (!S.verses[i]) { S.verses[i] = true; ui.toast('A verse was added to your journal'); }
+  if (!S.verses[i]) { S.verses[i] = true; ui.toast(U.verseAdded); }
 }
 
 // ---------- the Great Tree: the Choice Point, then the procession to the summit ----------
@@ -371,7 +375,7 @@ async function plantLantern() {
     S.lantern = { x: Math.round((player.x + s.x) / 2), y: Math.round((player.y + s.y) / 2 + 12), text: move };
     lanternT = performance.now(); save();
     audio.chime();
-    await ui.say([move ? FIN.fmt(FT.plantLine, { move }) : FT.plantLineNoMove, FT.plantGlow]);
+    await ui.say([move ? FIN.fmt(FT.plantLine, { move: FIN.showMove(move) }) : FT.plantLineNoMove, FT.plantGlow]);
     zoomTarget = .5;                                           // pull back to watch the whole island fill with colour
     [262, 330, 392, 523, 659, 784].forEach((f, i) => audio.bell(f, .07, .4 + i * .35));
     await new Promise(res => bloom(s.x, s.y, SIZE, 6, res));
@@ -390,9 +394,9 @@ async function endingCard() {
   const i = await ui.card(p, FT.endTitle, [
     ui.verse(C.TREE.ending_rumi, C.TREE.ending_rumi_source),
     h('p', {}, C.TREE.outro),
-    move ? h('p', { class: 'hl' }, FIN.fmt(FT.endToward, { move })) : null,
-    S.values.length ? h('p', {}, FIN.fmt(FT.endLanterns, { values: S.values.join(FT.listSep) })) : null,
-    S.steps.length ? h('p', {}, FIN.fmt(FT.endSteps, { steps: S.steps.join(FT.listSep) })) : null,
+    move ? h('p', { class: 'hl' }, FIN.fmt(FT.endToward, { move: FIN.showMove(move) })) : null,
+    S.values.length ? h('p', {}, FIN.fmt(FT.endLanterns, { values: S.values.map(C.valueName).join(FT.listSep) })) : null,
+    S.steps.length ? h('p', {}, FIN.fmt(FT.endSteps, { steps: S.steps.map(C.stepText).join(FT.listSep) })) : null,
     h('p', { class: 'fine' }, FT.endFine),
   ], [FT.keepWandering, FT.shareGame, ...(C.FEEDBACK.formId ? [FT.leaveFeedback] : [])]);
   ui.closePanel();
@@ -428,7 +432,7 @@ function drawLantern(t) {
   ctx.beginPath(); ctx.moveTo(x - 7, y); ctx.lineTo(x + 7, y); ctx.stroke();
   if (!L.text || glow < .5) return;
   ctx.font = `italic 9px ${SERIF}`; ctx.textAlign = 'center';
-  const words = L.text.split(/\s+/), lines = []; let cur = '';
+  const words = FIN.showMove(L.text).split(/\s+/), lines = []; let cur = '';
   for (const w of words) { const tt = cur ? cur + ' ' + w : w; if (cur && ctx.measureText(tt).width > 130) { lines.push(cur); cur = w; } else cur = tt; }
   lines.push(cur);
   lines.forEach((l, i) => {
@@ -470,7 +474,7 @@ async function encounter() {
   let struggle = known ? 40 : 60, shown = struggle;
   const p = ui.openPanel('encounter');
   const cvs = h('canvas', { class: 'stage' }), meter = h('div', { class: 'meter' }, h('i')), msg = h('p', { class: 'msg' }), moves = h('div', { class: 'moves' });
-  p.append(h('h2', { class: 'title' }, cr.name), cvs, h('p', { class: 'thought' }, cr.thought), h('label', { class: 'mlabel' }, 'struggle'), meter, msg, moves);
+  p.append(h('h2', { class: 'title' }, cr.name), cvs, h('p', { class: 'thought' }, cr.thought), h('label', { class: 'mlabel' }, U.struggle), meter, msg, moves);
   const g = cvs.getContext('2d'); let raf;
   const draw = () => {
     const r = cvs.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
@@ -495,11 +499,11 @@ async function encounter() {
   };
   draw();
   const learned = ['notice', ...C.PILLAR_ORDER.filter(k => S.done[k]).map(k => C.PILLARS[k].move)];
-  const SOFTENS = ' It softens noticeably.', TIP = '  (Fighting what we feel tends to make it bigger. ACT calls this the struggle switch.)';
+  const SOFTENS = U.softens, TIP = U.tip;
   // Reserve room for the longest message this encounter can show, so the move buttons never jump between turns.
   msg.style.minHeight = Math.max(...[...learned.map(id => C.MOVES[id].text + SOFTENS), ...C.STRUGGLE_MOVES.map(m => m.text + (S.tip ? '' : TIP))]
     .map(t => (msg.textContent = t, msg.offsetHeight))) + 'px';
-  msg.textContent = known ? `${cr.name} again. You have met before.` : `A wild ${cr.name} drifts out of the grey grass.`;
+  msg.textContent = fmt(known ? U.metAgain : U.wild, { name: cr.name });
 
   const outcome = await new Promise(res => {
     const turn = () => {
@@ -507,8 +511,8 @@ async function encounter() {
       const tempt = C.STRUGGLE_MOVES[Math.floor(Math.random() * C.STRUGGLE_MOVES.length)];
       const opts = learned.map(id => ({ label: C.MOVES[id].name, act: () => useMove(id) }));
       opts.splice(Math.floor(Math.random() * (opts.length + 1)), 0, { label: tempt.name, act: () => fight(tempt), tempt: true });
-      opts.forEach(o => moves.append(h('button', { onclick: o.act }, o.label)));
-      moves.append(h('button', { class: 'quiet', onclick: () => res('left') }, 'Walk on'));
+      opts.forEach(o => moves.append(h('button', { onclick: o.act, 'data-move': o.tempt ? 'struggle' : 'skill' }, o.label)));
+      moves.append(h('button', { class: 'quiet', onclick: () => res('left') }, U.walkOn));
     };
     const useMove = id => {
       const m = C.MOVES[id], weak = m.pillar && cr.weak.includes(m.pillar);
@@ -531,17 +535,17 @@ async function encounter() {
   moves.innerHTML = '';
   if (outcome === 'friend') {
     audio.chime();
-    msg.textContent = `The struggle eases. ${cr.name} is still here, but it no longer pulls at you. It walks beside you now.`;
+    msg.textContent = fmt(U.friend, { name: cr.name });
     const first = !S.spirits[cr.id];
     S.spirits[cr.id] = true; save();
-    if (first) msg.after(h('p', { class: 'lore' }, cr.lore), h('p', { class: 'fine' }, 'Added to your journal.'));
+    if (first) msg.after(h('p', { class: 'lore' }, cr.lore), h('p', { class: 'fine' }, U.addedJournal));
     paint(player.x, player.y, 220, .8);
   } else if (outcome === 'tired') {
-    msg.textContent = `The tug-of-war is exhausting. You let go of the rope for now, and ${cr.name} drifts back into the grass. Nobody wins a tug-of-war with their own mind.`;
+    msg.textContent = fmt(U.tired, { name: cr.name });
   } else {
-    msg.textContent = `You leave ${cr.name} be. It will be back sometime, and that's all right.`;
+    msg.textContent = fmt(U.left, { name: cr.name });
   }
-  await new Promise(res => moves.append(h('button', { class: 'primary', onclick: ui.firstTap(res) }, 'Continue')));
+  await new Promise(res => moves.append(h('button', { class: 'primary', onclick: ui.firstTap(res) }, U.continue)));
   cancelAnimationFrame(raf);
   ui.closePanel();
 }
@@ -565,17 +569,17 @@ paintSound();
 function openJournal(tab = 'pillars') {
   const p = ui.openPanel('journal');
   const body = h('div', { class: 'jbody' });
-  const tabs = [['pillars', 'Pillars'], ['spirits', 'Spirits'], ['verses', 'Verses'], ['you', 'You']];
-  const bar = h('nav', { class: 'tabs' }, tabs.map(([id, name]) => h('button', { class: id === tab ? 'on' : '', onclick: () => { ui.closePanel(); openJournal(id); } }, name)));
-  p.append(h('div', { class: 'jhead' }, h('h2', {}, 'Journal'), h('button', { class: 'close', onclick: () => ui.closePanel() }, 'Close')), bar, body);
+  const tabs = ['pillars', 'spirits', 'verses', 'you'];
+  const bar = h('nav', { class: 'tabs' }, tabs.map(id => h('button', { class: id === tab ? 'on' : '', 'data-tab': id, onclick: () => { ui.closePanel(); openJournal(id); } }, U.tabs[id])));
+  p.append(h('div', { class: 'jhead' }, h('h2', {}, U.journal), h('button', { class: 'close', onclick: () => ui.closePanel() }, U.close)), bar, body);
 
   if (tab === 'pillars') {
-    body.append(h('p', { class: 'fine' }, 'The six pillars of ACT together build psychological flexibility: being open, aware, and engaged in what matters.'));
+    body.append(h('p', { class: 'fine' }, U.pillarsIntro));
     for (const k of C.PILLAR_ORDER) {
       const P = C.PILLARS[k];
       body.append(S.done[k]
         ? h('section', { class: 'entry', style: `border-color:${P.color}` }, h('h3', {}, P.name), h('p', { class: 'region' }, P.region), h('p', {}, P.plain), ui.learnMore(P.more), ui.verse(P.rumi, P.rumiSource))
-        : h('section', { class: 'entry dim' }, h('h3', {}, P.name), h('p', {}, `Not yet learned. Seek ${P.guardian} at ${P.region}.`)));
+        : h('section', { class: 'entry dim' }, h('h3', {}, P.name), h('p', {}, fmt(U.notLearned, { guardian: P.guardian, short: P.guardian.split(',')[0], region: P.region }))));
     }
   } else if (tab === 'spirits') {
     const grid = h('div', { class: 'grid' });
@@ -584,40 +588,41 @@ function openJournal(tab = 'pillars') {
       const g = c.getContext('2d'); g.scale(2, 2);
       if (met) drawCreature(g, cr, 40, 58, 1.6, 1, 1);
       else { g.globalAlpha = .25; drawCreature(g, cr, 40, 58, 1.6, 1, 0); }
-      grid.append(h('div', { class: 'spirit' + (met ? '' : ' dim') }, c, h('b', {}, met ? cr.name : '???'), h('small', {}, met ? cr.lore : 'Wanders the grey grass.')));
+      grid.append(h('div', { class: 'spirit' + (met ? '' : ' dim') }, c, h('b', {}, met ? cr.name : U.unknownSpirit), h('small', {}, met ? cr.lore : U.unmetLore)));
     }
-    body.append(h('p', { class: 'fine' }, `${Object.keys(S.spirits).length} of ${C.CREATURES.length} spirits walk beside you.`), grid);
+    body.append(h('p', { class: 'fine' }, fmt(U.spiritsCount, { n: Object.keys(S.spirits).length, total: C.CREATURES.length })), grid);
   } else if (tab === 'verses') {
     let any = false;
     for (const k of C.PILLAR_ORDER) if (S.done[k]) { any = true; body.append(ui.verse(C.PILLARS[k].rumi, C.PILLARS[k].rumiSource)); }
     C.VERSES.forEach((v, i) => { if (S.verses[i]) { any = true; body.append(ui.verse(v.text, v.source)); } });
-    if (!any) body.append(h('p', { class: 'fine' }, 'Verses gather here as you meet the spirits and read the old stones.'));
-    body.append(h('p', { class: 'fine' }, 'Verses are loose renderings after Rumi (Jalāl al-Dīn Rūmī, 1207–1273), not direct translations.'));
+    if (!any) body.append(h('p', { class: 'fine' }, U.noVerses));
+    body.append(h('p', { class: 'fine' }, U.versesNote));
   } else {
     const chars = h('div', { class: 'chips' }, C.CHARACTERS.map(ch => h('button', { class: 'chip' + (S.char === ch.id ? ' on' : ''), onclick: () => { S.char = ch.id; save(); ui.closePanel(); openJournal('you'); } }, ch.name)));
-    body.append(h('h3', {}, 'Traveller'), chars);
-    body.append(h('h3', {}, 'Your lanterns'), h('p', {}, S.values.length ? S.values.join(' · ') : 'Not yet chosen. They wait at the Lantern Summit.'));
-    if (S.valueNote) body.append(h('p', { class: 'note' }, `“${S.valueNote}”`));
-    body.append(h('h3', {}, 'Your small steps'), h('p', {}, S.steps.length ? S.steps.join(' · ') : 'Not yet taken. The stepping stones are in the east.'));
+    body.append(h('h3', {}, U.traveller), chars);
+    body.append(h('h3', {}, U.language), langSwitch(true));
+    body.append(h('h3', {}, U.yourLanterns), h('p', {}, S.values.length ? S.values.map(C.valueName).join(U.listSep) : U.noLanterns));
+    if (S.valueNote) body.append(h('p', { class: 'note' }, fmt(U.quote, { text: S.valueNote })));
+    body.append(h('h3', {}, U.yourSteps), h('p', {}, S.steps.length ? S.steps.map(C.stepText).join(U.listSep) : U.noSteps));
     const F = S.finale;
     if (F) {
-      const tags = (list, cls) => h('div', { class: 'tags' + (cls ? ' ' + cls : '') }, list.map(m => h('span', {}, m)));
+      const tags = (list, cls) => h('div', { class: 'tags' + (cls ? ' ' + cls : '') }, list.map(m => h('span', {}, FIN.showMove(m))));
       body.append(h('h3', {}, FT.jTitle),
-        F.commitment ? h('div', { class: 'hl' }, h('small', {}, FT.jCommit), h('b', {}, F.commitment)) : null,
+        F.commitment ? h('div', { class: 'hl' }, h('small', {}, FT.jCommit), h('b', {}, FIN.showMove(F.commitment))) : null,
         h('h4', {}, FT.jToward), tags(F.toward),
         h('h4', {}, FT.jAway), tags(F.away, 'away'));
-      if (F.situation) body.append(h('h4', {}, FT.jSituation), h('p', { class: 'note' }, `“${F.situation}”`), h('p', { class: 'fine' }, FT.jPrivate));
+      if (F.situation) body.append(h('h4', {}, FT.jSituation), h('p', { class: 'note' }, fmt(U.quote, { text: F.situation })), h('p', { class: 'fine' }, FT.jPrivate));
       body.append(h('p', { class: 'fine' }, FT.jRevisit));
     }
     body.append(h('div', { class: 'btns' },
-      h('button', { class: 'primary', onclick: share }, 'Share this game'),
-      C.FEEDBACK.formId ? h('button', { onclick: openFeedback }, 'Leave feedback') : null,
+      h('button', { class: 'primary', onclick: share }, U.share),
+      C.FEEDBACK.formId ? h('button', { onclick: openFeedback }, U.feedback) : null,
       h('button', { onclick: async () => {
-        if (await ui.choose('Start over? This erases your progress on this device.', ['Yes, start over', 'Keep my journey'])) return;
+        if (await ui.choose(U.startOverConfirm, [U.startOverYes, U.startOverNo])) return;
         try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(MASK_KEY); } catch (e) {}
         location.reload();
-      } }, 'Start over')));
-    body.append(h('p', { class: 'fine' }, C.DISCLAIMER + ' Everything you write stays on this device.'));
+      } }, U.startOver)));
+    body.append(h('p', { class: 'fine' }, C.DISCLAIMER + ' ' + U.staysHere));
   }
 }
 
@@ -627,16 +632,16 @@ function openJournal(tab = 'pillars') {
 async function openFeedback() {
   ui.closePanel();
   const p = ui.openPanel('exercise');
-  const text = h('textarea', { id: 'feedback-text', rows: '6', maxlength: '1500', placeholder: 'How did it feel? A moment that stayed with you? One thing you would change?' });
-  const i = await ui.card(p, 'Leave feedback', [
-    h('p', {}, 'Your words go straight to the person who made this island. No account needed.'),
+  const text = h('textarea', { id: 'feedback-text', rows: '6', maxlength: '1500', placeholder: U.fbPlaceholder });
+  const i = await ui.card(p, U.feedback, [
+    h('p', {}, U.fbIntro),
     text,
-    h('p', { class: 'fine' }, 'Anonymous. Please don’t include private details.'),
-  ], ['Send', 'Cancel']);
+    h('p', { class: 'fine' }, U.fbAnon),
+  ], [U.send, U.cancel]);
   ui.closePanel();
   if (i !== 0 || !text.value.trim()) return;
   const device = /iPhone|iPad/.test(navigator.userAgent) ? 'iPhone/iPad' : /Android/.test(navigator.userAgent) ? 'Android' : 'Computer';
-  const context = `Pillars ${doneCount()}/6 · Spirits ${Object.keys(S.spirits).length}/${C.CREATURES.length} · Finished ${S.ended ? 'yes' : 'no'} · ${device}`;
+  const context = `Pillars ${doneCount()}/6 · Spirits ${Object.keys(S.spirits).length}/${C.CREATURES.length} · Finished ${S.ended ? 'yes' : 'no'} · ${device} · ${lang}`;
   const F = C.FEEDBACK;
   try {
     // no-cors: Google doesn't allow reading the reply, so a resolved fetch means "sent".
@@ -644,21 +649,38 @@ async function openFeedback() {
       method: 'POST', mode: 'no-cors',
       body: new URLSearchParams({ [`entry.${F.textEntry}`]: text.value.trim(), [`entry.${F.contextEntry}`]: context }),
     });
-    ui.toast('Thank you. Your words were sent.');
+    ui.toast(U.fbThanks);
   } catch (e) {
-    ui.toast('Couldn’t send. Try again when you’re online.', 4000);
+    ui.toast(U.fbFail, 4000);
   }
 }
 
 async function share() {
-  const data = { title: C.TITLE, text: 'A quiet little game about the six pillars of Acceptance & Commitment Therapy.', url: location.href.split('#')[0] };
+  const url = new URL(location.href); url.hash = ''; url.searchParams.delete('lang');   // friends get their own language
+  const data = { title: C.TITLE, text: U.shareText, url: url.href };
   try {
     await navigator.share(data);
   } catch (e) {
     // Web Share can be missing or blocked (e.g. inside an embedded viewer); copy the link instead.
-    try { await navigator.clipboard.writeText(data.url); ui.toast('Link copied'); }
-    catch (e2) { ui.toast('Copy the address from your browser to share'); }
+    try { await navigator.clipboard.writeText(data.url); ui.toast(U.linkCopied); }
+    catch (e2) { ui.toast(U.copyManually); }
   }
+}
+
+// ---------- language ----------
+// EN · FI · PT. Switching saves the journey and reloads the page in the new language.
+function langSwitch(full) {
+  return h('div', { class: 'langs' + (full ? ' full' : ''), role: 'group', 'aria-label': U.language },
+    Object.entries(LANGS).map(([code, name]) => h('button', {
+      class: code === lang ? 'on' : '', lang: code, 'data-lang': code, 'aria-pressed': String(code === lang), 'aria-label': name, title: name,
+      onclick: () => switchLang(code),
+    }, full ? name : code.toUpperCase())));
+}
+function switchLang(code) {
+  if (code === lang) return;
+  if (mode === 'play') S.pos = { x: player.x, y: player.y };
+  save(); saveMask();
+  setLang(code);
 }
 
 // ---------- title, character select, start ----------
@@ -678,19 +700,19 @@ function drawCharPreview(canvas, id) {
 function title() {
   const p = ui.openPanel('titlescreen');
   const hasSave = !!S.char;
-  const status = h('p', { class: 'fine' }, 'grinding ink…');
+  const status = h('p', { class: 'fine' }, U.loading);
   let starting = false;                  // a quick double tap must not start the game twice
   const go = async isNew => {
     if (starting) return;
     starting = true;
-    if (isNew && hasSave && await ui.choose('Start a new journey? Your current progress will be erased.', ['Yes, begin again', 'Cancel'])) { starting = false; return; }
+    if (isNew && hasSave && await ui.choose(U.newJourneyConfirm, [U.newJourneyYes, U.cancel])) { starting = false; return; }
     begin(isNew);
   };
   const btns = h('div', { class: 'btns', hidden: '' },
-    hasSave ? h('button', { class: 'primary', onclick: () => go(false) }, 'Continue') : null,
-    h('button', { class: hasSave ? '' : 'primary', onclick: () => go(true) }, hasSave ? 'New journey' : 'Begin'));
-  p.append(h('div', { class: 'titlecard' }, h('div', { class: 'seal' }, '心'), h('h1', {}, C.TITLE), h('p', { class: 'sub' }, C.SUBTITLE), status, btns,
-           h('p', { class: 'fine foot' }, C.DISCLAIMER, h('br'), 'Best with sound. On iPhone: Share → Add to Home Screen for full screen.')));
+    hasSave ? h('button', { class: 'primary', 'data-go': 'continue', onclick: () => go(false) }, U.continue) : null,
+    h('button', { class: hasSave ? '' : 'primary', 'data-go': 'new', onclick: () => go(true) }, hasSave ? U.newJourney : U.begin));
+  p.append(h('div', { class: 'titlecard' }, langSwitch(false), h('div', { class: 'seal' }, '心'), h('h1', {}, C.TITLE), h('p', { class: 'sub' }, C.SUBTITLE), status, btns,
+           h('p', { class: 'fine foot' }, C.DISCLAIMER, h('br'), U.titleFoot)));
   return { ready: () => { status.remove(); btns.hidden = false; } };
 }
 
@@ -704,14 +726,14 @@ async function begin(isNew) {
   ui.closePanel();
   if (!S.char) {
     const p = ui.openPanel('select');
-    p.append(h('h2', {}, 'Who walks the island?'), h('p', { class: 'fine' }, 'You can change this later in the journal.'));
+    p.append(h('h2', {}, U.whoWalks), h('p', { class: 'fine' }, U.changeLater));
     const grid = h('div', { class: 'grid' });
     p.append(grid);                      // previews only animate once their canvas is on the page
     await new Promise(res => {
       const pick = ui.firstTap(id => { S.char = id; res(); });
       for (const ch of C.CHARACTERS) {
         const c = h('canvas', { width: '192', height: '192' });
-        grid.append(h('button', { class: 'charcard', onclick: () => pick(ch.id) }, c, h('b', {}, ch.name)));
+        grid.append(h('button', { class: 'charcard', 'data-char': ch.id, onclick: () => pick(ch.id) }, c, h('b', {}, ch.name)));
         drawCharPreview(c, ch.id);
       }
     });
@@ -728,6 +750,10 @@ async function begin(isNew) {
 
 // ---------- boot ----------
 async function boot() {
+  document.title = C.TITLE;
+  $('#pills').setAttribute('aria-label', U.aria.pills);
+  $('#soundBtn').setAttribute('aria-label', U.aria.sound);
+  $('#journalBtn').setAttribute('aria-label', U.aria.journal);
   requestAnimationFrame(frame);
   const t = title();
   await new Promise(r => setTimeout(r, 50));          // let the title paint first
@@ -743,6 +769,6 @@ async function boot() {
   if ('serviceWorker' in navigator && /^https:|^http:\/\/localhost/.test(location.href) && !window.__SINGLE_FILE__)
     navigator.serviceWorker.register('sw.js').catch(() => {});
   addEventListener('pagehide', () => { if (mode === 'play') { S.pos = { x: player.x, y: player.y }; save(); saveMask(); } });
-  if (location.hash === '#debug') window.GAME = { get S() { return S; }, player, audio, get map() { return map; }, meetGuardian, encounter, greatTree, openJournal, W, center, get followers() { return followers; }, get dusk() { return dusk; }, get near() { return near && near.label; } };
+  if (location.hash === '#debug') window.GAME = { get S() { return S; }, player, audio, get map() { return map; }, meetGuardian, encounter, greatTree, openJournal, W, center, get followers() { return followers; }, get dusk() { return dusk; }, get near() { return near && near.label; }, get nearId() { return near && near.id; }, lang, i18n: I18N, C, FT, EXT: EX.TEXT };
 }
 boot();

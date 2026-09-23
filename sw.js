@@ -2,10 +2,11 @@
 // Network-first, so edits you push show up on the next online launch;
 // the cache is only the fallback when offline.
 
-const CACHE = 'faded-isle-v2';
+const CACHE = 'faded-isle-v3';
 const FILES = [
   './', 'index.html', 'style.css', 'manifest.webmanifest', 'icon-180.png', 'icon-512.png',
   'game.js', 'world.js', 'content.js', 'audio.js', 'ui.js', 'art.js', 'exercises.js', 'finale.js',
+  'i18n.js', 'lang/fi.js', 'lang/pt.js',
 ];
 
 self.addEventListener('install', e => {

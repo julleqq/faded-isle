@@ -9,11 +9,13 @@
 
 import { h, wait, say } from './ui.js';
 import { drawCharacter, drawEnso } from './art.js';
-import { PILLARS, MOVES } from './content.js';
+import { PILLARS, MOVES, valueName } from './content.js';
 import { rng } from './world.js';
 import * as audio from './audio.js';
+import { PACK, localize, phrasebook, clone } from './i18n.js';
 
 // Every player-facing string. Whole sentences; {name} marks a placeholder.
+// Translations: the `finale` part of lang/fi.js and lang/pt.js.
 export const TEXT = {
   title: 'The Choice Point',
   tree: 'Great Tree',                     // speaker name in the dialog box
@@ -166,6 +168,12 @@ export const TEXT = {
   jPrivate: 'Only you can see this. It stays on this device.',
   jRevisit: 'You can walk the Choice Point again at the Great Tree.',
 };
+// The suggested moves are saved by their English text (as ids); showMove() shows them
+// in the chosen language. Moves the player wrote stay exactly as written.
+const EN = clone({ awayMoves: TEXT.awayMoves, towardMoves: TEXT.towardMoves, valueToward: TEXT.valueToward });
+localize(TEXT, PACK.finale, 'finale');
+const MOVE_BOOK = phrasebook(EN, TEXT);
+export const showMove = s => MOVE_BOOK.get(s) ?? s;
 
 export const fmt = (s, o = {}) => s.replace(/\{(\w+)\}/g, (m, k) => (k in o ? o[k] : m));
 
@@ -592,7 +600,7 @@ function pickStep(V, T, st, side, S) {
   V.reset('pin');
   V.msg(side < 0 ? TEXT.awayPrompt : TEXT.towardPrompt);
   const key = text => (side < 0 ? 'a:' : 't:') + text.toLowerCase();
-  if (side > 0 && S.values && S.values.length) V.body.append(h('p', { class: 'fnote' }, fmt(TEXT.lanterns, { values: S.values.join(TEXT.listSep) })));
+  if (side > 0 && S.values && S.values.length) V.body.append(h('p', { class: 'fnote' }, fmt(TEXT.lanterns, { values: S.values.map(valueName).join(TEXT.listSep) })));
   const chips = h('div', { class: 'chips fchips' });
   let go;
   let input;
@@ -609,7 +617,7 @@ function pickStep(V, T, st, side, S) {
     go.setAttribute('aria-disabled', parts.length ? 'true' : 'false');
   };
   const chip = (text, isOn, cls, toggle) => {
-    const c = btn(text, 'chip ' + cls + (isOn ? ' on' : ''), () => {
+    const c = btn(showMove(text), 'chip ' + cls + (isOn ? ' on' : ''), () => {
       const on = toggle();
       c.classList.toggle('on', on); c.setAttribute('aria-pressed', on);
       if (on) { addLeaf(T, side, key(text)); audio.soft(); } else dropLeaf(T, key(text));
@@ -663,10 +671,10 @@ async function forksStep(V, T, F, awayPool) {
     const opts = shuffle([{ kind: 'best', move: best }, { kind: 'other', move: other }, { kind: 'away', text: nextAway() }]);
     for (;;) {
       const awayIdx = opts.findIndex(o => o.kind === 'away');
-      const k = await V.options(opts.map(o => o.kind === 'away' ? o.text : MOVES[o.move].name), awayIdx);
+      const k = await V.options(opts.map(o => o.kind === 'away' ? showMove(o.text) : MOVES[o.move].name), awayIdx);
       const o = opts[k];
       if (o.kind === 'away') {
-        V.msg(fmt(rec.awayTried.length ? TEXT.awayAgain : TEXT.awayLine, { move: o.text }));
+        V.msg(fmt(rec.awayTried.length ? TEXT.awayAgain : TEXT.awayLine, { move: showMove(o.text) }));
         rec.awayTried.push(o.text);
         await walkAway(T, i);
         if (awayPool.length > 1) o.text = nextAway();
@@ -720,7 +728,7 @@ function commitStep(V, T, F) {
     const update = () => { V.setHint(chosen ? TEXT.ready : TEXT.commitNeed); go.classList.toggle('off', !chosen); go.setAttribute('aria-disabled', chosen ? 'false' : 'true'); };
     const all = [...F.toward];
     for (const text of all) {
-      const c = btn(text, 'chip' + (F.written.toward.includes(text) ? ' ownchip' : '') + (text === chosen ? ' on' : ''), () => {
+      const c = btn(showMove(text), 'chip' + (F.written.toward.includes(text) ? ' ownchip' : '') + (text === chosen ? ' on' : ''), () => {
         chosen = text;
         for (const x of chips.children) { const on = x === c; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); }
         T.highlight = 't:' + text.toLowerCase(); audio.soft(); update();
@@ -740,8 +748,8 @@ async function closingStep(V, T, F) {
   audio.chime();
   tween(3000, k => { T.final = ease(k); });
   await wait(REDUCED ? 100 : 900);
-  await speak(TEXT.closing.map(l => fmt(l, { move: F.commitment })));
-  V.msg(fmt(TEXT.closingNote, { move: F.commitment }));
+  await speak(TEXT.closing.map(l => fmt(l, { move: showMove(F.commitment) })));
+  V.msg(fmt(TEXT.closingNote, { move: showMove(F.commitment) }));
   await V.buttons([[TEXT.finish, 'primary']]);
 }
 
@@ -750,9 +758,9 @@ export async function finale(panelEl, S) {
   const V = makeView(panelEl), T = treeState(S);
   const stopCanvas = makeCanvas(V.cv, T);
   const F = { situation: '', away: [], toward: [], written: { away: [], toward: [] }, forks: [], commitment: '' };
-  const valueIdeas = [...new Set((S.values || []).map(v => TEXT.valueToward[v]).filter(Boolean))];
-  const away = { presets: TEXT.awayMoves.slice(), sel: new Set(), own: [] };
-  const toward = { presets: [...valueIdeas, ...TEXT.towardMoves.filter(m => !valueIdeas.includes(m))], lan: new Set(valueIdeas), sel: new Set(), own: [] };
+  const valueIdeas = [...new Set((S.values || []).map(v => EN.valueToward[v]).filter(Boolean))];
+  const away = { presets: EN.awayMoves.slice(), sel: new Set(), own: [] };
+  const toward = { presets: [...valueIdeas, ...EN.towardMoves.filter(m => !valueIdeas.includes(m))], lan: new Set(valueIdeas), sel: new Set(), own: [] };
   try {
     await speak(TEXT.arrival);
     const steps = [() => situationStep(V, F), () => pickStep(V, T, away, -1, S), () => pickStep(V, T, toward, 1, S)];
