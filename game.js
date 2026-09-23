@@ -744,9 +744,13 @@ async function begin(isNew) {
   player.x = pos.x; player.y = pos.y; cam.x = player.x; cam.y = player.y;
   stopProcession(); dusk = duskTarget = 0; zoomK = zoomTarget = 1; lanternT = null;
   mode = 'play'; $('#hud').hidden = false; updateHud(); save();
+  guardBack();
   if (isNew || !S.seenIntro) { S.seenIntro = true; await ui.say(C.INTRO); save(); }
   if (S.finaleStage === 'procession') { startProcession(true); ui.toast(FT.summitToast, 4000); }
 }
+
+let backArmed = false;
+function guardBack() { if (!history.state?.game) history.pushState({ game: 1 }, ''); }
 
 // ---------- boot ----------
 async function boot() {
@@ -768,6 +772,12 @@ async function boot() {
   // Offline support when served from a website (not from a file or an embedded viewer).
   if ('serviceWorker' in navigator && /^https:|^http:\/\/localhost/.test(location.href) && !window.__SINGLE_FILE__)
     navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Android back gesture: the first press only warns, so the game isn't closed by accident.
+  addEventListener('popstate', () => {
+    if (backArmed) { save(); saveMask(); history.back(); return; }
+    backArmed = true; ui.toast(U.backAgain, 2500); history.pushState({ game: 1 }, '');
+    setTimeout(() => { backArmed = false; }, 2500);
+  });
   addEventListener('pagehide', () => { if (mode === 'play') { S.pos = { x: player.x, y: player.y }; save(); saveMask(); } });
   if (location.hash === '#debug') window.GAME = { get S() { return S; }, player, audio, get map() { return map; }, meetGuardian, encounter, greatTree, openJournal, W, center, get followers() { return followers; }, get dusk() { return dusk; }, get near() { return near && near.label; }, get nearId() { return near && near.id; }, lang, i18n: I18N, C, FT, EXT: EX.TEXT };
 }

@@ -342,6 +342,7 @@ export const UI = {
   // sharing
   shareText: 'A quiet little game about the six pillars of Acceptance & Commitment Therapy.',
   linkCopied: 'Link copied',
+  backAgain: 'Press back again to leave',
   copyManually: 'Copy the address from your browser to share',
 };
 

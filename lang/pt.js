@@ -302,6 +302,7 @@ export const pt = {
       fbFail: 'Não deu para enviar. Tente de novo quando tiver internet.',
       shareText: 'Um joguinho tranquilo sobre os seis pilares da Terapia de Aceitação e Compromisso (ACT).',
       linkCopied: 'Link copiado',
+      backAgain: 'Toque em voltar de novo para sair',
       copyManually: 'Copie o endereço do navegador para compartilhar',
     },
   },

@@ -43,7 +43,9 @@ export function start() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
-  if (!navigator.audioSession) {
+  // Only older iPhones need the silent <audio> trick; on Android it would show a media notification.
+  const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (iOS && !navigator.audioSession) {
     try { const el = new Audio(silentWav()); el.loop = true; el.setAttribute('playsinline', ''); el.play().catch(() => {}); } catch (e) {}
   }
   ac = new AC();
