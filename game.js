@@ -276,9 +276,10 @@ async function greatTree() {
     S.values.length ? h('p', {}, 'Your lanterns: ', h('b', {}, S.values.join(' · '))) : null,
     S.steps.length ? h('p', {}, 'Your small steps: ', h('b', {}, S.steps.join(' · '))) : null,
     h('p', { class: 'fine' }, 'The spirits still wander the grass, and the island is yours to walk.'),
-  ], ['Keep wandering', 'Share this game']);
+  ], ['Keep wandering', 'Share this game', 'Leave feedback']);
   ui.closePanel();
   if (i === 1) share();
+  if (i === 2) feedbackLink().click();
 }
 
 // ---------- encounters ----------
@@ -416,13 +417,23 @@ function openJournal(tab = 'pillars') {
     body.append(h('h3', {}, 'Your small steps'), h('p', {}, S.steps.length ? S.steps.join(' · ') : 'Not yet taken. The stepping stones are in the east.'));
     body.append(h('div', { class: 'btns' },
       h('button', { class: 'primary', onclick: share }, 'Share this game'),
+      feedbackLink(),
       h('button', { onclick: async () => {
         if (await ui.choose('Start over? This erases your progress on this device.', ['Yes, start over', 'Keep my journey'])) return;
         try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(MASK_KEY); } catch (e) {}
         location.reload();
       } }, 'Start over')));
+    body.append(h('p', { class: 'fine' }, 'Feedback opens a public form on GitHub (free account needed). It never includes what you wrote in the game.'));
     body.append(h('p', { class: 'fine' }, C.DISCLAIMER + ' Everything you write stays on this device.'));
   }
+}
+
+// A real link (not window.open) so it also works inside embedded viewers and the installed app.
+// Only progress counts and device type are prefilled; nothing the player wrote.
+function feedbackLink() {
+  const device = /iPhone|iPad/.test(navigator.userAgent) ? 'iPhone/iPad' : /Android/.test(navigator.userAgent) ? 'Android' : 'Computer';
+  const context = `Pillars learned: ${doneCount()}/6 · Spirits met: ${Object.keys(S.spirits).length}/${C.CREATURES.length} · Finished: ${S.ended ? 'yes' : 'no'} · ${device}`;
+  return h('a', { class: 'linkbtn', href: `${C.FEEDBACK_URL}&context=${encodeURIComponent(context)}`, target: '_blank', rel: 'noopener' }, 'Leave feedback');
 }
 
 async function share() {

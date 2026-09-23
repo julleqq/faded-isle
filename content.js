@@ -267,4 +267,7 @@ export const SIGN = [
   'Someone has scratched underneath: "Grey grass hides wandering spirits. Be kind to them."',
 ];
 
+// Feedback goes to the game's GitHub repo as an issue (a public form; needs a free GitHub account).
+export const FEEDBACK_URL = 'https://github.com/julleqq/faded-isle/issues/new?template=feedback.yml';
+
 export const DISCLAIMER = 'A reflective game, not a substitute for therapy.';

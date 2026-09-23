@@ -1,33 +1,45 @@
 # The Faded Isle
 
 A quiet ink-wash exploration game about the six pillars of Acceptance & Commitment
-Therapy. You walk a grey island; colour returns wherever you step. Six guardian
+Therapy. You walk a grey island, and colour returns wherever you step. Six guardian
 spirits each teach one pillar through a small exercise, and wild spirits (worries,
 doubts, sorrows) in the tall grass are met with ACT skills instead of fought.
 
-Plain HTML + JavaScript: no build step, no libraries, no image files except the icon.
+**Play:** https://julleqq.github.io/faded-isle/
 
-## Play
+Plain HTML + JavaScript: no libraries, no image files except the icon, no build step
+needed to play.
 
-- **Single file:** `faded-isle.html` is the whole game in one file (rebuild with `node act-game/build.mjs` after editing). Open it in any browser, no server needed.
-- **Online:** open `act-game/` on GitHub Pages, e.g. `https://<user>.github.io/<repo>/act-game/`.
-- **Install as an app (PWA):** open the GitHub Pages address in Safari, tap Share → *Add to Home Screen*.
-  It gets its own icon, opens without browser bars, and works offline (`sw.js` caches the game).
-  The service worker fetches fresh files whenever you're online, so pushed edits appear on the next launch;
-  if you add a new file, list it in `FILES` in `sw.js`.
-- **Controls:** touch and drag anywhere to move (floating joystick); tap the round button to interact.
-  On a computer: arrow keys / WASD and Space.
-- Progress is saved on the device (localStorage). *Journal → You → Start over* resets it.
+## Install it on your phone (PWA)
 
-## Run locally
+**iPhone:** open the link above in **Safari**, not in another app's browser. Tap
+**Share** (the square with an arrow), then **Add to Home Screen** → **Add**.
+**Android:** open it in Chrome and tap **Install app** (or ⋮ → *Add to Home screen*).
+
+You get its own icon, fullscreen without browser bars, and offline play after the
+first visit. Progress is saved on the device. When the game is updated, the new
+version loads the next time you open it with internet.
+
+## Controls
+
+Drag anywhere to walk (a floating joystick). Tap the round button to meet, read or touch.
+On a computer: arrow keys / WASD and Space.
+
+## Feedback
+
+Players can tap **Leave feedback** (Journal → You, and at the end of the game). It opens
+a short form that becomes an [issue](../../issues) in this repo, prefilled with progress
+and device type only. It needs a free GitHub account. Read them under *Issues*
+and label or close them as you act on them.
+
+## Develop
 
 ```sh
-npx http-server act-game   # any static server works; ES modules need http://, not file://
+npx http-server .          # any static server works; ES modules need http://, not file://
+node build.mjs             # rebuilds faded-isle.html, the whole game in one file
 ```
 
 Add `#debug` to the URL to expose `window.GAME` in the console (e.g. `GAME.meetGuardian('values')`).
-
-## Where to change things
 
 | File | What lives there |
 |---|---|
@@ -36,7 +48,8 @@ Add `#debug` to the URL to expose `window.GAME` in the console (e.g. `GAME.meetG
 | `exercises.js` | The six guardian mini-exercises. |
 | `art.js` | Characters, guardians and spirits, drawn in code. |
 | `game.js` | Movement, colour reveal, encounters, journal, saving. |
-| `audio.js` | Generated wind, sea and bells. |
+| `audio.js` | Generated music, wind, sea and bells. |
+| `sw.js` | Offline support. If you add a new file, list it in `FILES`. |
 
 The verses are loose renderings after Rumi's *Masnavi*, not direct translations,
 because many popular "Rumi quotes" are misattributed or copyrighted. Replace them
