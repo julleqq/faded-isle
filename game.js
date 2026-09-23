@@ -9,6 +9,8 @@ import { h } from './ui.js';
 import * as audio from './audio.js';
 import { drawCharacter, drawGuardian, drawCreature } from './art.js';
 import { EXERCISES } from './exercises.js';
+import * as FIN from './finale.js';
+const FT = FIN.TEXT;
 
 const SAVE_KEY = 'fadedisle.v1', MASK_KEY = 'fadedisle.mask';
 const MS = 8;                       // reveal mask is 1/8 of world resolution
@@ -59,6 +61,7 @@ const player = { x: W.START.x, y: W.START.y, dir: 1, phase: 0, moving: false };
 const cam = { x: SIZE / 2, y: SIZE / 2 };
 const center = k => ({ x: W.SHRINES[k].x * TILE + 16, y: W.SHRINES[k].y * TILE + 16 });
 const interactables = [
+  { ...center('values'), label: FT.plantAct, r: 230, when: () => procession && S.finaleGathered && !ceremony, run: () => plantLantern() },
   ...C.PILLAR_ORDER.map(k => ({ ...center(k), label: 'Meet', r: 64, run: () => meetGuardian(k) })),
   ...W.VERSE_STONES.map((v, i) => ({ x: v.x * TILE + 16, y: v.y * TILE + 16, label: 'Read', r: 56, run: () => readVerse(i) })),
   { x: W.SIGNPOST.x * TILE + 16, y: W.SIGNPOST.y * TILE + 16, label: 'Read', r: 56, run: () => ui.say(C.SIGN) },
@@ -111,8 +114,9 @@ function update(dt, t) {
     if (k >= 1) { blooms.splice(i, 1); b.done && b.done(); }
   }
   updateParticles(dt, t);
+  updateProcession(dt);
   player.moving = false;
-  if (mode !== 'play' || ui.busy) { joy = null; return; }
+  if (mode !== 'play' || ui.busy || ceremony) { joy = null; return; }
 
   const v = inputVector();
   if (v.x || v.y) {
@@ -126,7 +130,7 @@ function update(dt, t) {
       if (Math.abs(v.x) > 0.1) player.dir = Math.sign(v.x);
       if (W.tileAt(map, player.x, player.y) === T.TALL) {
         grassWalk += moved;
-        if (grassWalk > nextEnc) { grassWalk = 0; nextEnc = 260 + Math.random() * 380; encounter(); }
+        if (grassWalk > nextEnc && !procession) { grassWalk = 0; nextEnc = 260 + Math.random() * 380; encounter(); }
       }
     }
   }
@@ -134,7 +138,8 @@ function update(dt, t) {
   paint(player.x, player.y - 8, 80, dt * 2.5);
   paint(player.x, player.y - 8, 150, dt * 0.5);
 
-  near = interactables.find(o => Math.hypot(o.x - player.x, o.y - player.y) < o.r) || null;
+  if (procession && !S.finaleGathered && !gathering && Math.hypot(player.x - summit().x, player.y - summit().y) < 190) gatherAtSummit();
+  near = interactables.find(o => (!o.when || o.when()) && Math.hypot(o.x - player.x, o.y - player.y) < o.r) || null;
   setAct(near && near.label);
 
   const region = W.regionAt(player.x, player.y);
@@ -165,7 +170,7 @@ function updateParticles(dt, t) {
 
 // ---------- render ----------
 function render(t, dt) {
-  const sw = vw / zoom, sh = vh / zoom;
+  const z = Math.max(zoom * zoomK, vw / SIZE, vh / SIZE), sw = vw / z, sh = vh / z;
   if (mode === 'play') {
     cam.x += (player.x - cam.x) * Math.min(1, dt * 5);
     cam.y += (player.y - 20 - cam.y) * Math.min(1, dt * 5);
@@ -181,11 +186,15 @@ function render(t, dt) {
   tctx.drawImage(colorLayer, sx, sy, sw, sh, 0, 0, tmp.width, tmp.height);
   ctx.drawImage(tmp, 0, 0);
 
-  const k = dpr * zoom;
+  const k = dpr * z;
   ctx.setTransform(k, 0, 0, k, -sx * k, -sy * k);
   const visible = o => o.x > sx - 60 && o.x < sx + sw + 60 && o.y > sy - 60 && o.y < sy + sh + 100;
-  const sprites = C.PILLAR_ORDER.map(p => ({ p, ...center(p) })).filter(visible)
-    .map(({ p, x, y }) => ({ y, draw: () => drawGuardian(ctx, p, x, y - 4, t, !!S.done[p], C.PILLARS[p].color) }));
+  const sprites = C.PILLAR_ORDER.map(p => ({ p, ...guardPos(p) })).filter(visible)
+    .map(({ p, x, y }) => ({ y, draw: () => {
+      if (speaking === p) { ctx.fillStyle = 'rgba(255, 214, 120, .45)'; ctx.beginPath(); ctx.ellipse(x, y - 2, 30 + Math.sin(t * 4) * 3, 10, 0, 0, 7); ctx.fill(); }
+      drawGuardian(ctx, p, x, y - 4, t, !!S.done[p], C.PILLARS[p].color);
+    } }));
+  if (procession) for (const f of followers) sprites.push({ y: f.y, draw: () => drawCreature(ctx, f.cr, f.x, f.y, .6, t, 1) });
   if (mode === 'play') sprites.push({ y: player.y, draw: () => drawCharacter(ctx, S.char, player.x, player.y, player.dir, player.phase) });
   sprites.sort((a, b) => a.y - b.y).forEach(s => s.draw());
   if (near && !ui.busy) {                                         // a small ink mark over what you can interact with
@@ -198,6 +207,7 @@ function render(t, dt) {
     ctx.beginPath(); ctx.ellipse(p.x, p.y, p.glow ? 2 : 3.5, p.glow ? 2 : 2, p.r, 0, 7); ctx.fill();
   }
   ctx.globalAlpha = 1;
+  drawDusk(t, sx, sy, k);
 
   if (joy) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -276,24 +286,180 @@ async function readVerse(i) {
   if (!S.verses[i]) { S.verses[i] = true; ui.toast('A verse was added to your journal'); }
 }
 
+// ---------- the Great Tree: the Choice Point, then the procession to the summit ----------
+async function runChoicePoint() {
+  const p = ui.openPanel('finale');
+  try { await FIN.finale(p, S); } finally { ui.closePanel(); save(); }
+}
+
 async function greatTree() {
-  if (S.ended) return ui.say(['The Great Tree hums softly, full of colour.']);
-  if (doneCount() < 6) return ui.say([...C.TREE.asleep, `(${doneCount()} of 6 colours have returned.)`]);
-  await ui.say(C.TREE.ending);
-  await new Promise(res => bloom(40 * TILE, 40 * TILE, SIZE, 6, res));
-  mctx.globalAlpha = 1; mctx.fillStyle = '#fff'; mctx.fillRect(0, 0, mask.width, mask.height); maskDirty = true;
-  S.ended = true; save(); saveMask();
-  const p = ui.openPanel('exercise');
-  const i = await ui.card(p, 'The Isle in Colour', [
+  const tree = l => `${FT.tree}: ${l}`;
+  if (S.finaleStage === 'procession') return ui.say(FT.treeProcession.map(tree));
+  if (S.ended) {
+    if (await ui.choose(FT.treeEnded, [FT.walkAgain, FT.goodbye]) === 0) { await runChoicePoint(); ui.toast(FT.againSaved); }
+    return;
+  }
+  if (doneCount() < 6) return ui.say([...C.TREE.asleep, FIN.fmt(FT.treeCount, { n: doneCount() })]);
+  await ui.say([...C.TREE.ending.slice(0, 2), FT.treeWakes]);
+  await runChoicePoint();
+  if (!S.finale) return;                                   // closed early somehow: the tree simply waits
+  S.finaleStage = 'procession'; S.finaleGathered = false; save();
+  bloom(40 * TILE, 40 * TILE, 7 * TILE, 3);
+  startProcession(false);
+  await ui.say([followers.length ? FT.processionStart : FT.processionStartAlone, tree(FT.processionTree)]);
+  ui.toast(FT.summitToast, 4000);
+}
+
+// Dusk falls, befriended spirits follow in a line, the guardians gather at the Lantern Summit,
+// the player plants a lantern with their weekly toward move and the island floods with colour.
+// S.finaleStage === 'procession' is saved, so a reload resumes the walk.
+let procession = false, ceremony = false, gathering = false, speaking = null, lanternT = null;
+let dusk = 0, duskTarget = 0, zoomK = 1, zoomTarget = 1, followers = [];
+const trail = [], gathered = new Set();
+const summit = () => center('values');
+const GATHER = { present: [-125, 22], defusion: [-82, 74], acceptance: [82, 74], selfctx: [125, 22], action: [0, -64] };
+function guardPos(k) {
+  if (!gathered.has(k)) return center(k);
+  const s = summit(), [dx, dy] = GATHER[k];
+  return { x: s.x + dx, y: s.y + dy };
+}
+function startProcession(resume) {
+  procession = true; duskTarget = 1; if (resume) dusk = 1;
+  trail.length = 0; gathered.clear();
+  if (S.finaleGathered) Object.keys(GATHER).forEach(k => gathered.add(k));
+  followers = C.CREATURES.filter(c => S.spirits[c.id]).map((cr, i, all) => {
+    const f = { cr, x: player.x + (i - (all.length - 1) / 2) * 24, y: player.y + 24 + (i % 2) * 8 };   // a little row behind you
+    if (!resume) paint(f.x, f.y, 50, .5);
+    return f;
+  });
+}
+function stopProcession() { procession = false; followers = []; gathered.clear(); trail.length = 0; }
+function updateProcession(dt) {
+  dusk += (duskTarget - dusk) * Math.min(1, dt * .35);
+  zoomK += (zoomTarget - zoomK) * Math.min(1, dt * 1.2);
+  if (!procession || !followers.length) return;
+  const head = trail[0];
+  if (!head || Math.hypot(player.x - head.x, player.y - head.y) > 5) { trail.unshift({ x: player.x, y: player.y }); if (trail.length > 200) trail.pop(); }
+  followers.forEach((f, i) => {              // each walks where the one ahead of it walked a moment ago
+    const n = 6 * (i + 1); if (n >= trail.length) return;
+    const p = trail[n], off = (i % 2 ? 1 : -1) * 5, e = Math.min(1, dt * 4);
+    f.x += (p.x + off - f.x) * e; f.y += (p.y + 4 - f.y) * e;
+  });
+}
+
+async function gatherAtSummit() {
+  gathering = true; setAct(null);
+  try {
+    await ui.say([FT.gatherIntro]);
+    let i = 0;
+    for (const k of ['present', 'defusion', 'acceptance', 'selfctx', 'action', 'values']) {
+      if (k !== 'values') { gathered.add(k); const g = guardPos(k); paint(g.x, g.y, 70, .9); }
+      audio.bell([392, 440, 494, 523, 587, 659][i++], .06);
+      speaking = k;
+      await ui.say([`${C.PILLARS[k].guardian.split(',')[0]}: ${FT.guardianLines[k]}`]);
+    }
+    S.finaleGathered = true; save();
+    ui.toast(FT.plantHint, 4000);
+  } finally { gathering = false; speaking = null; }
+}
+
+async function plantLantern() {
+  if (!procession || ceremony) return;
+  ceremony = true; setAct(null);
+  try {
+    const s = summit(), move = (S.finale && S.finale.commitment) || '';
+    S.lantern = { x: Math.round((player.x + s.x) / 2), y: Math.round((player.y + s.y) / 2 + 12), text: move };
+    lanternT = performance.now(); save();
+    audio.chime();
+    await ui.say([move ? FIN.fmt(FT.plantLine, { move }) : FT.plantLineNoMove, FT.plantGlow]);
+    zoomTarget = .5;                                           // pull back to watch the whole island fill with colour
+    [262, 330, 392, 523, 659, 784].forEach((f, i) => audio.bell(f, .07, .4 + i * .35));
+    await new Promise(res => bloom(s.x, s.y, SIZE, 6, res));
+    mctx.globalAlpha = 1; mctx.fillStyle = '#fff'; mctx.fillRect(0, 0, mask.width, mask.height); maskDirty = true;
+    S.ended = true; S.finaleStage = 'done'; save(); saveMask();
+    audio.chime();
+    await ui.say(C.TREE.ending.slice(3));
+    await endingCard();
+  } finally {
+    zoomTarget = 1; duskTarget = 0; stopProcession(); ceremony = false; save();
+  }
+}
+
+async function endingCard() {
+  const p = ui.openPanel('exercise'), move = S.finale && S.finale.commitment;
+  const i = await ui.card(p, FT.endTitle, [
     ui.verse(C.TREE.ending_rumi, C.TREE.ending_rumi_source),
     h('p', {}, C.TREE.outro),
-    S.values.length ? h('p', {}, 'Your lanterns: ', h('b', {}, S.values.join(' · '))) : null,
-    S.steps.length ? h('p', {}, 'Your small steps: ', h('b', {}, S.steps.join(' · '))) : null,
-    h('p', { class: 'fine' }, 'The spirits still wander the grass, and the island is yours to walk.'),
-  ], ['Keep wandering', 'Share this game', ...(C.FEEDBACK.formId ? ['Leave feedback'] : [])]);
+    move ? h('p', { class: 'hl' }, FIN.fmt(FT.endToward, { move })) : null,
+    S.values.length ? h('p', {}, FIN.fmt(FT.endLanterns, { values: S.values.join(FT.listSep) })) : null,
+    S.steps.length ? h('p', {}, FIN.fmt(FT.endSteps, { steps: S.steps.join(FT.listSep) })) : null,
+    h('p', { class: 'fine' }, FT.endFine),
+  ], [FT.keepWandering, FT.shareGame, ...(C.FEEDBACK.formId ? [FT.leaveFeedback] : [])]);
   ui.closePanel();
   if (i === 1) share();
   if (i === 2) openFeedback();
+}
+
+const SERIF = '"Iowan Old Style", Palatino, Georgia, serif';
+// Drawn after the world: the sunset tint, the planted lantern, and the way to the summit.
+function drawDusk(t, sx, sy, k) {
+  if (dusk > .01) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, cv.height);
+    g.addColorStop(0, `rgba(240, 132, 84, ${.36 * dusk})`);
+    g.addColorStop(.5, `rgba(222, 128, 110, ${.18 * dusk})`);
+    g.addColorStop(1, `rgba(78, 58, 118, ${.3 * dusk})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.setTransform(k, 0, 0, k, -sx * k, -sy * k);
+  }
+  if (S.lantern) drawLantern(t);
+  if (procession && !S.finaleGathered && !gathering) drawGuide(t, sx, sy, k);
+}
+function drawLantern(t) {
+  const L = S.lantern, glow = lanternT == null ? 1 : Math.min(1, (performance.now() - lanternT) / 2500);
+  const x = L.x, y = L.y - 20, r = 36 + Math.sin(t * 2) * 4;
+  const g = ctx.createRadialGradient(x, y, 2, x, y, r * 1.6);
+  g.addColorStop(0, `rgba(255, 210, 110, ${.8 * glow})`); g.addColorStop(1, 'rgba(255, 210, 110, 0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 1.6, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#1d1b19'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(L.x, y + 8); ctx.stroke();
+  ctx.fillStyle = glow < 1 ? `rgb(${Math.round(160 + 86 * glow)}, ${Math.round(150 + 44 * glow)}, ${Math.round(130 - 56 * glow)})` : '#f6c24a';
+  ctx.beginPath(); ctx.ellipse(x, y, 7, 9, 0, 0, 7); ctx.fill();
+  ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(x, y, 7, 9, 0, 0, 7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 7, y); ctx.lineTo(x + 7, y); ctx.stroke();
+  if (!L.text || glow < .5) return;
+  ctx.font = `italic 9px ${SERIF}`; ctx.textAlign = 'center';
+  const words = L.text.split(/\s+/), lines = []; let cur = '';
+  for (const w of words) { const tt = cur ? cur + ' ' + w : w; if (cur && ctx.measureText(tt).width > 130) { lines.push(cur); cur = w; } else cur = tt; }
+  lines.push(cur);
+  lines.forEach((l, i) => {
+    const ly = y - 16 - (lines.length - 1 - i) * 11;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247, 242, 231, .85)'; ctx.strokeText(l, x, ly);
+    ctx.fillStyle = '#1d1b19'; ctx.fillText(l, x, ly);
+  });
+}
+function drawGuide(t, sx, sy, k) {
+  const s = summit(), Wd = cv.width, Hd = cv.height, d = dpr;
+  const px = (s.x - sx) * k, py = (s.y - 40 - sy) * k;
+  const mL = 34 * d, mR = Wd - 34 * d, mT = 150 * d, mB = Hd - 150 * d;   // below the HUD and toasts, above the act button
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (px > mL && px < mR && py > mT && py < mB) {           // in view: a soft light over the summit
+    const g = ctx.createRadialGradient(px, py, 2, px, py, 30 * d);
+    g.addColorStop(0, 'rgba(255, 214, 120, .9)'); g.addColorStop(1, 'rgba(255, 214, 120, 0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py + Math.sin(t * 2) * 3 * d, 30 * d, 0, 7); ctx.fill();
+    return;
+  }
+  const cx = Wd / 2, cy = Hd / 2, dx = px - cx, dy = py - cy;
+  const sc = Math.min(dx > 0 ? (mR - cx) / dx : dx < 0 ? (mL - cx) / dx : Infinity, dy > 0 ? (mB - cy) / dy : dy < 0 ? (mT - cy) / dy : Infinity);
+  const ang = Math.atan2(dy, dx), bob = Math.sin(t * 3) * 4 * d;
+  const ax = cx + dx * sc + Math.cos(ang) * bob, ay = cy + dy * sc + Math.sin(ang) * bob;
+  ctx.save(); ctx.translate(ax, ay); ctx.rotate(ang); ctx.globalAlpha = .85; ctx.fillStyle = '#1d1b19';
+  ctx.beginPath(); ctx.moveTo(15 * d, 0); ctx.lineTo(-9 * d, -11 * d); ctx.lineTo(-3 * d, 0); ctx.lineTo(-9 * d, 11 * d); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  ctx.font = `italic ${15 * d}px ${SERIF}`; ctx.textAlign = 'center';
+  const tw = ctx.measureText(FT.summitLabel).width;
+  const lx = Math.max(tw / 2 + 8 * d, Math.min(Wd - tw / 2 - 8 * d, ax - Math.cos(ang) * 34 * d)), ly = ay - Math.sin(ang) * 30 * d + 5 * d;
+  ctx.lineWidth = 4 * d; ctx.strokeStyle = 'rgba(247, 242, 231, .9)'; ctx.strokeText(FT.summitLabel, lx, ly);
+  ctx.fillStyle = '#1d1b19'; ctx.fillText(FT.summitLabel, lx, ly);
 }
 
 // ---------- encounters ----------
@@ -433,6 +599,16 @@ function openJournal(tab = 'pillars') {
     body.append(h('h3', {}, 'Your lanterns'), h('p', {}, S.values.length ? S.values.join(' · ') : 'Not yet chosen. They wait at the Lantern Summit.'));
     if (S.valueNote) body.append(h('p', { class: 'note' }, `“${S.valueNote}”`));
     body.append(h('h3', {}, 'Your small steps'), h('p', {}, S.steps.length ? S.steps.join(' · ') : 'Not yet taken. The stepping stones are in the east.'));
+    const F = S.finale;
+    if (F) {
+      const tags = (list, cls) => h('div', { class: 'tags' + (cls ? ' ' + cls : '') }, list.map(m => h('span', {}, m)));
+      body.append(h('h3', {}, FT.jTitle),
+        F.commitment ? h('div', { class: 'hl' }, h('small', {}, FT.jCommit), h('b', {}, F.commitment)) : null,
+        h('h4', {}, FT.jToward), tags(F.toward),
+        h('h4', {}, FT.jAway), tags(F.away, 'away'));
+      if (F.situation) body.append(h('h4', {}, FT.jSituation), h('p', { class: 'note' }, `“${F.situation}”`), h('p', { class: 'fine' }, FT.jPrivate));
+      body.append(h('p', { class: 'fine' }, FT.jRevisit));
+    }
     body.append(h('div', { class: 'btns' },
       h('button', { class: 'primary', onclick: share }, 'Share this game'),
       C.FEEDBACK.formId ? h('button', { onclick: openFeedback }, 'Leave feedback') : null,
@@ -544,8 +720,10 @@ async function begin(isNew) {
   }
   const pos = S.pos || W.START;
   player.x = pos.x; player.y = pos.y; cam.x = player.x; cam.y = player.y;
+  stopProcession(); dusk = duskTarget = 0; zoomK = zoomTarget = 1; lanternT = null;
   mode = 'play'; $('#hud').hidden = false; updateHud(); save();
   if (isNew || !S.seenIntro) { S.seenIntro = true; await ui.say(C.INTRO); save(); }
+  if (S.finaleStage === 'procession') { startProcession(true); ui.toast(FT.summitToast, 4000); }
 }
 
 // ---------- boot ----------
@@ -565,6 +743,6 @@ async function boot() {
   if ('serviceWorker' in navigator && /^https:|^http:\/\/localhost/.test(location.href) && !window.__SINGLE_FILE__)
     navigator.serviceWorker.register('sw.js').catch(() => {});
   addEventListener('pagehide', () => { if (mode === 'play') { S.pos = { x: player.x, y: player.y }; save(); saveMask(); } });
-  if (location.hash === '#debug') window.GAME = { get S() { return S; }, player, audio, get map() { return map; }, meetGuardian, encounter, greatTree, openJournal, W };
+  if (location.hash === '#debug') window.GAME = { get S() { return S; }, player, audio, get map() { return map; }, meetGuardian, encounter, greatTree, openJournal, W, center, get followers() { return followers; }, get dusk() { return dusk; }, get near() { return near && near.label; } };
 }
 boot();

@@ -118,9 +118,56 @@ export const TEXT = {
   ],
   closingNote: 'Your toward move for this week: “{move}”',
   finish: 'Continue',
+
+  // ----- at the Great Tree (game.js) -----
+  treeWakes: 'The tree stirs, and a slow, warm voice rises from its roots.',
+  treeCount: '({n} of 6 colours have returned.)',
+  treeProcession: ['The summit is waiting. Walk north, and your friends will follow.'],
+  treeEnded: 'The Great Tree hums softly, full of colour.',
+  walkAgain: 'Walk the Choice Point again',
+  goodbye: 'Goodbye',
+  againSaved: 'Your journal holds your new choices.',
+  // ----- the procession to the Lantern Summit -----
+  processionStart: 'The sun is low. As you step away from the tree, the spirits you befriended gather at your heels.',
+  processionStartAlone: 'The sun is low, and the whole island glows amber.',
+  processionTree: 'Carry your lantern up to the Lantern Summit, where Lumen keeps the lights. The others will meet you there.',
+  summitToast: 'North: the Lantern Summit',
+  summitLabel: 'Lantern Summit',
+  gatherIntro: 'At the summit, in the evening light, the six guardians are waiting for you.',
+  // One closing line per guardian (the speaker's name is added in front).
+  guardianLines: {
+    present: 'You kept coming back to now. That is all presence ever asks: notice where you are, and return.',
+    defusion: 'Your mind will keep talking. Let the words float by like leaves, and keep walking.',
+    acceptance: 'The waves will come again. You know how to open your arms and let them pass.',
+    selfctx: 'Whatever weather crosses you, you are the sky that holds it.',
+    action: 'One small step, then the next. Your worries can come along. They always could.',
+    values: 'Noticing, unhooking, making room, seeing from the sky, remembering what matters, stepping forward: you carry all six now. Plant your lantern.',
+  },
+  plantAct: 'Plant',                        // the round action button
+  plantHint: 'Plant your lantern',
+  plantLine: 'You set your lantern among Lumen’s lights. On its paper, in your own hand: “{move}”.',
+  plantLineNoMove: 'You set your lantern among Lumen’s lights.',
+  plantGlow: 'It begins to glow.',
+  // ----- the ending card -----
+  endTitle: 'The Isle in Colour',
+  endToward: 'Your toward move this week: {move}',
+  endLanterns: 'Your lanterns: {values}',
+  endSteps: 'Your small steps: {steps}',
+  endFine: 'The spirits still wander the grass, and the island is yours to walk.',
+  keepWandering: 'Keep wandering',
+  shareGame: 'Share this game',
+  leaveFeedback: 'Leave feedback',
+  // ----- journal, "You" tab -----
+  jTitle: 'Your Choice Point',
+  jCommit: 'Your toward move this week',
+  jToward: 'Toward moves',
+  jAway: 'Away moves you noticed',
+  jSituation: 'What felt hard',
+  jPrivate: 'Only you can see this. It stays on this device.',
+  jRevisit: 'You can walk the Choice Point again at the Great Tree.',
 };
 
-const fmt = (s, o = {}) => s.replace(/\{(\w+)\}/g, (m, k) => (k in o ? o[k] : m));
+export const fmt = (s, o = {}) => s.replace(/\{(\w+)\}/g, (m, k) => (k in o ? o[k] : m));
 
 const INK = '#1d1b19', GREY = '#8d8a82', SOFT = '#5b564e', PAPER2 = '#f7f2e7';
 const SERIF = '"Iowan Old Style", Palatino, Georgia, serif';
