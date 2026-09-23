@@ -1,10 +1,11 @@
 {
+  "id": "./",
   "name": "The Faded Isle",
   "short_name": "Faded Isle",
   "description": "A quiet ink-wash journey through the six pillars of Acceptance & Commitment Therapy.",
   "start_url": "./",
   "scope": "./",
-  "display": "fullscreen",
+  "display": "standalone",
   "orientation": "any",
   "background_color": "#efe7d6",
   "theme_color": "#efe7d6",

@@ -503,6 +503,9 @@ async function boot() {
     if (data) { const img = new Image(); img.onload = () => mctx.drawImage(img, 0, 0); img.src = data; }
   } catch (e) {}
   t.ready();
+  // Offline support when served from a website (not from a file or an embedded viewer).
+  if ('serviceWorker' in navigator && /^https:|^http:\/\/localhost/.test(location.href) && !window.__SINGLE_FILE__)
+    navigator.serviceWorker.register('sw.js').catch(() => {});
   addEventListener('pagehide', () => { if (mode === 'play') { S.pos = { x: player.x, y: player.y }; save(); saveMask(); } });
   if (location.hash === '#debug') window.GAME = { get S() { return S; }, player, get map() { return map; }, meetGuardian, encounter, greatTree, openJournal, W };
 }

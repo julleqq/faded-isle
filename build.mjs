@@ -28,7 +28,7 @@ const icon = 'data:image/png;base64,' + fs.readFileSync(path.join(dir, 'icon-180
 const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script type="module"'));
 const title = html.match(/<title>.*<\/title>/)[0];
 const style = `<style>\n${read('style.css')}</style>`;
-const script = `<script>\n(() => {\n${js}})();\n</script>`;
+const script = `<script>\nwindow.__SINGLE_FILE__ = true;\n(() => {\n${js}})();\n</script>`;
 
 if (process.argv.includes('--fragment')) {
   process.stdout.write(`${title}\n${style}\n${body}${script}\n`);

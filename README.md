@@ -11,7 +11,10 @@ Plain HTML + JavaScript: no build step, no libraries, no image files except the 
 
 - **Single file:** `faded-isle.html` is the whole game in one file (rebuild with `node act-game/build.mjs` after editing). Open it in any browser, no server needed.
 - **Online:** open `act-game/` on GitHub Pages, e.g. `https://<user>.github.io/<repo>/act-game/`.
-- **iPhone fullscreen:** in Safari tap Share → *Add to Home Screen*. It opens without browser bars.
+- **Install as an app (PWA):** open the GitHub Pages address in Safari, tap Share → *Add to Home Screen*.
+  It gets its own icon, opens without browser bars, and works offline (`sw.js` caches the game).
+  The service worker fetches fresh files whenever you're online, so pushed edits appear on the next launch;
+  if you add a new file, list it in `FILES` in `sw.js`.
 - **Controls:** touch and drag anywhere to move (floating joystick); tap the round button to interact.
   On a computer: arrow keys / WASD and Space.
 - Progress is saved on the device (localStorage). *Journal → You → Start over* resets it.
