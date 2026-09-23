@@ -276,10 +276,10 @@ async function greatTree() {
     S.values.length ? h('p', {}, 'Your lanterns: ', h('b', {}, S.values.join(' · '))) : null,
     S.steps.length ? h('p', {}, 'Your small steps: ', h('b', {}, S.steps.join(' · '))) : null,
     h('p', { class: 'fine' }, 'The spirits still wander the grass, and the island is yours to walk.'),
-  ], ['Keep wandering', 'Share this game', 'Leave feedback']);
+  ], ['Keep wandering', 'Share this game', ...(C.FEEDBACK.formId ? ['Leave feedback'] : [])]);
   ui.closePanel();
   if (i === 1) share();
-  if (i === 2) feedbackLink().click();
+  if (i === 2) openFeedback();
 }
 
 // ---------- encounters ----------
@@ -417,23 +417,43 @@ function openJournal(tab = 'pillars') {
     body.append(h('h3', {}, 'Your small steps'), h('p', {}, S.steps.length ? S.steps.join(' · ') : 'Not yet taken. The stepping stones are in the east.'));
     body.append(h('div', { class: 'btns' },
       h('button', { class: 'primary', onclick: share }, 'Share this game'),
-      feedbackLink(),
+      C.FEEDBACK.formId ? h('button', { onclick: openFeedback }, 'Leave feedback') : null,
       h('button', { onclick: async () => {
         if (await ui.choose('Start over? This erases your progress on this device.', ['Yes, start over', 'Keep my journey'])) return;
         try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(MASK_KEY); } catch (e) {}
         location.reload();
       } }, 'Start over')));
-    body.append(h('p', { class: 'fine' }, 'Feedback opens a public form on GitHub (free account needed). It never includes what you wrote in the game.'));
     body.append(h('p', { class: 'fine' }, C.DISCLAIMER + ' Everything you write stays on this device.'));
   }
 }
 
-// A real link (not window.open) so it also works inside embedded viewers and the installed app.
-// Only progress counts and device type are prefilled; nothing the player wrote.
-function feedbackLink() {
+// ---------- feedback ----------
+// Sent anonymously to a Google Form. Only the typed message plus progress counts and
+// device type are sent, never anything written elsewhere in the game.
+async function openFeedback() {
+  ui.closePanel();
+  const p = ui.openPanel('exercise');
+  const text = h('textarea', { id: 'feedback-text', rows: '6', maxlength: '1500', placeholder: 'How did it feel? A moment that stayed with you? One thing you would change?' });
+  const i = await ui.card(p, 'Leave feedback', [
+    h('p', {}, 'Your words go straight to the person who made this island. No account needed.'),
+    text,
+    h('p', { class: 'fine' }, 'Anonymous. Please don’t include private details.'),
+  ], ['Send', 'Cancel']);
+  ui.closePanel();
+  if (i !== 0 || !text.value.trim()) return;
   const device = /iPhone|iPad/.test(navigator.userAgent) ? 'iPhone/iPad' : /Android/.test(navigator.userAgent) ? 'Android' : 'Computer';
-  const context = `Pillars learned: ${doneCount()}/6 · Spirits met: ${Object.keys(S.spirits).length}/${C.CREATURES.length} · Finished: ${S.ended ? 'yes' : 'no'} · ${device}`;
-  return h('a', { class: 'linkbtn', href: `${C.FEEDBACK_URL}&context=${encodeURIComponent(context)}`, target: '_blank', rel: 'noopener' }, 'Leave feedback');
+  const context = `Pillars ${doneCount()}/6 · Spirits ${Object.keys(S.spirits).length}/${C.CREATURES.length} · Finished ${S.ended ? 'yes' : 'no'} · ${device}`;
+  const F = C.FEEDBACK;
+  try {
+    // no-cors: Google doesn't allow reading the reply, so a resolved fetch means "sent".
+    await fetch(`https://docs.google.com/forms/d/e/${F.formId}/formResponse`, {
+      method: 'POST', mode: 'no-cors',
+      body: new URLSearchParams({ [`entry.${F.textEntry}`]: text.value.trim(), [`entry.${F.contextEntry}`]: context }),
+    });
+    ui.toast('Thank you. Your words were sent.');
+  } catch (e) {
+    ui.toast('Couldn’t send. Try again when you’re online.', 4000);
+  }
 }
 
 async function share() {

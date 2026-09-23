@@ -267,7 +267,10 @@ export const SIGN = [
   'Someone has scratched underneath: "Grey grass hides wandering spirits. Be kind to them."',
 ];
 
-// Feedback goes to the game's GitHub repo as an issue (a public form; needs a free GitHub account).
-export const FEEDBACK_URL = 'https://github.com/julleqq/faded-isle/issues/new?template=feedback.yml';
+// In-game feedback is sent anonymously to a Google Form (no account needed for players).
+// Fill these from the form's "Get pre-filled link" URL:
+//   https://docs.google.com/forms/d/e/<formId>/viewform?usp=pp_url&entry.<textEntry>=x&entry.<contextEntry>=x
+// While formId is empty, the feedback buttons are hidden.
+export const FEEDBACK = { formId: '', textEntry: '', contextEntry: '' };
 
 export const DISCLAIMER = 'A reflective game, not a substitute for therapy.';

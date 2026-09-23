@@ -27,10 +27,11 @@ On a computer: arrow keys / WASD and Space.
 
 ## Feedback
 
-Players can tap **Leave feedback** (Journal → You, and at the end of the game). It opens
-a short form that becomes an [issue](../../issues) in this repo, prefilled with progress
-and device type only. It needs a free GitHub account. Read them under *Issues*
-and label or close them as you act on them.
+Players tap **Leave feedback** (Journal → You, and at the end of the game), type a
+message and tap Send. No account needed. It arrives anonymously in a Google Form owned
+by the maker, together with progress counts and device type (never anything else
+written in the game). Connect the form in `content.js` → `FEEDBACK`; while it is
+empty, the button stays hidden.
 
 ## Develop
 
