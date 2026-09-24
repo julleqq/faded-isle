@@ -440,7 +440,7 @@ function frame(now) {
     perfSum += dt; perfN++;
     if ((perfT += dt) > 3) {
       perf.fps = Math.round(perfN / perfSum);
-      if (mode === 'play' && perfSum / perfN > 1 / 34 && quality > .7) { quality -= .15; resize(); }
+      if (mode === 'play' && !navigator.webdriver && perfSum / perfN > 1 / 34 && quality > .7) { quality -= .15; resize(); }
       perf.quality = quality; perfT = perfSum = perfN = 0;
     }
   }
