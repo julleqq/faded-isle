@@ -10,6 +10,30 @@ doubts, sorrows) in the tall grass are met with ACT skills instead of fought.
 Plain HTML + JavaScript: no libraries, no image files except the icon, no build step
 needed to play.
 
+## 3D version
+
+**Play:** https://julleqq.github.io/faded-isle/3d/ (linked from the 2D title screen, and back).
+
+The same journey in first person, drawn with three.js as an ink-wash painting: the island
+starts grey and colour blooms around you as you walk. Left half of the screen: walk
+(floating joystick). Right half: drag to look around. On a computer: WASD / arrows to
+walk, drag the mouse to look, Space to interact. Journal → You → *Reduce motion* turns off
+the head-bob and smooths turning. It installs as its own app ("The Faded Isle 3D") with a
+separate save, and shares the language choice with the 2D game.
+
+| File (`3d/`) | What lives there |
+|---|---|
+| `game3d.js` | Game flow (copied from `game.js`), first-person camera and controls, colour reveal, procession. |
+| `world3d.js` | Terrain, water, sky and props built from `world.js`'s tile grid, merged into chunks. |
+| `ink.js` | The ink-wash shading: reveal-mask mixing, paper grain, ink outlines, geometry merging. |
+| `models.js` | Characters (first-person hints), guardians and spirits built from primitives. |
+| `audio3d.js` | Spatial ambience and footsteps on top of `audio.js`. |
+| `vendor/three.module.min.js` | three.js r170 (MIT), loaded through an import map; no CDN. |
+
+Everything else (words, exercises, Choice Point, dialogs, music) is imported from the
+2D game's files, so edits there show up in both versions. Add `#debug` for `window.GAME`
+(also `GAME.perf` with frame rate and draw calls).
+
 ## Install it on your phone (PWA)
 
 **iPhone:** open the link above in **Safari**, not in another app's browser. Tap

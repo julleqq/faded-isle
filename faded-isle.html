@@ -144,6 +144,8 @@ textarea { margin-bottom: 8px; resize: none; }
 .titlescreen .btns { flex-direction: column; align-items: center; }
 .titlescreen .btns button { min-width: 200px; }
 .titlescreen .foot { margin: 30px 0 0; }
+/* quiet link between the 2D and 3D versions */
+.verlink { display: inline-block; margin-top: 6px; font-size: 14px; color: var(--ink-soft); text-decoration: underline dotted; text-underline-offset: 3px; padding: 8px 10px; }
 /* Language switch: EN · FI · PT on the title card, full names in the journal */
 .langs { display: flex; justify-content: center; margin: -8px auto 14px; width: max-content; max-width: 100%; border: 1.5px solid var(--ink); border-radius: 999px; overflow: hidden; background: var(--paper-2); }
 .langs button { border: 0; border-radius: 0; box-shadow: none; background: transparent; min-width: 56px; min-height: 44px; padding: .45em .9em; font-size: 15px; letter-spacing: .08em; }
@@ -958,6 +960,10 @@ const fi = {
       linkCopied: 'Linkki kopioitu',
       backAgain: 'Poistu painamalla takaisin uudelleen',
       copyManually: 'Kopioi osoite selaimen osoiteriviltä',
+      try3d: 'Kokeile 3D:nä', version2d: '2D-versio',
+      controlsTouch: 'Vasen puoli: kävele · Oikea puoli: katsele ympärillesi',
+      controlsKeys: 'WASD tai nuolet: kävele · Vedä: katsele ympärillesi',
+      comfort: 'Mukavuus', reduceMotion: 'Vähennä liikettä',
     },
   },
 
@@ -1514,6 +1520,10 @@ const pt = {
       linkCopied: 'Link copiado',
       backAgain: 'Toque em voltar de novo para sair',
       copyManually: 'Copie o endereço do navegador para compartilhar',
+      try3d: 'Experimente em 3D', version2d: 'Versão 2D',
+      controlsTouch: 'Lado esquerdo: caminhar · Lado direito: olhar ao redor',
+      controlsKeys: 'WASD ou setas: caminhar · Arraste: olhar ao redor',
+      comfort: 'Conforto', reduceMotion: 'Reduzir movimento',
     },
   },
 
@@ -2194,6 +2204,12 @@ const UI = {
   linkCopied: 'Link copied',
   backAgain: 'Press back again to leave',
   copyManually: 'Copy the address from your browser to share',
+  // the two versions link to each other from their title screens
+  try3d: 'Try it in 3D', version2d: '2D version',
+  // 3D version only
+  controlsTouch: 'Left side: walk · Right side: look around',
+  controlsKeys: 'WASD or arrows: walk · Drag: look around',
+  comfort: 'Comfort', reduceMotion: 'Reduce motion',
 };
 
 // ---------- the chosen language ----------
@@ -2381,7 +2397,10 @@ function toggleMute() {
   return muted;
 }
 
-return { get start() { return start; }, get level() { return level; }, get bell() { return bell; }, get chime() { return chime; }, get soft() { return soft; }, get thud() { return thud; }, get breath() { return breath; }, get setSea() { return setSea; }, get isMuted() { return isMuted; }, get toggleMute() { return toggleMute; } };
+// For the 3D ambience module: the shared context and master gain (null before start()).
+function context() { return ac ? { ac, master } : null; }
+
+return { get start() { return start; }, get level() { return level; }, get bell() { return bell; }, get chime() { return chime; }, get soft() { return soft; }, get thud() { return thud; }, get breath() { return breath; }, get setSea() { return setSea; }, get isMuted() { return isMuted; }, get toggleMute() { return toggleMute; }, get context() { return context; } };
 })();
 const __ui = (() => {
 // Tiny UI toolkit: Pokémon-style dialog box, choices, full-screen panels, toasts.
@@ -4932,7 +4951,8 @@ function title() {
     hasSave ? h('button', { class: 'primary', 'data-go': 'continue', onclick: () => go(false) }, U.continue) : null,
     h('button', { class: hasSave ? '' : 'primary', 'data-go': 'new', onclick: () => go(true) }, hasSave ? U.newJourney : U.begin));
   p.append(h('div', { class: 'titlecard' }, langSwitch(false), h('div', { class: 'seal' }, '心'), h('h1', {}, C.TITLE), h('p', { class: 'sub' }, C.SUBTITLE), status, btns,
-           h('p', { class: 'fine foot' }, C.DISCLAIMER, h('br'), U.titleFoot)));
+           h('p', { class: 'fine foot' }, C.DISCLAIMER, h('br'), U.titleFoot),
+           window.__SINGLE_FILE__ ? null : h('a', { class: 'verlink', href: '3d/' }, U.try3d)));
   return { ready: () => { status.remove(); btns.hidden = false; } };
 }
 

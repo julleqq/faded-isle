@@ -18,17 +18,16 @@ import { LANGS, lang, setLang, fmt } from '../i18n.js';
 import * as I18N from '../i18n.js';
 import { U as IU, makeWash, radialTex, PAPER } from './ink.js';
 import { Island, makeSky, makeMountains, blobShadow } from './world3d.js';
-import * as A3 from './audio3d.js';                // spatial ambience and footsteps
+import * as A3 from './audio3d.js';
+import * as MODELS from './models.js';           // characters, guardians and spirits built from primitives                // spatial ambience and footsteps
 const FT = FIN.TEXT, U = C.UI;
 
-// Figures come from models.js; stubs.js stands in if it is missing.
-const MODELS = await import('./models.js').catch(() => import('./stubs.js'));
 
 const SAVE_KEY = 'fadedisle3d.v1', MASK_KEY = 'fadedisle3d.mask', MOTION_KEY = 'fadedisle3d.reducemotion';
 const MS = 8;                       // reveal mask is 1/8 of the 2D world's pixels (4 texels per tile)
 const SPEED = 74;                   // world px per second (≈ 2.3 tiles/s: an unhurried walk)
 const $ = s => document.querySelector(s);
-const EYE = { monk: 1.12, crane: 1.02, fox: .56, drop: .5 };
+const EYE = MODELS.EYE_HEIGHT;                     // eye height per character (monk 1.5, fox .58, drop .5, crane 1.1)
 const tiles = v => v / TILE;
 // Start a few steps further south than the 2D game, so the Great Tree stands whole in front of you.
 const START3D = { x: W.START.x, y: W.START.y + 3.5 * TILE };
@@ -169,7 +168,10 @@ const fwd = () => ({ x: Math.sin(player.yaw), y: -Math.cos(player.yaw) });
 
 // ---------- update ----------
 let mode = 'title', grassWalk = 0, nextEnc = 300, lastRegion = null, saveT = 0, lastStep = 0;
-const canStand = (x, y) => [[-7, -7], [7, -7], [-7, 7], [7, 7]].every(([dx, dy]) => W.walkable(map, x + dx, y + dy));
+// Guardians and the Great Tree are solid in 3D, so the camera never walks into them.
+const SOLID = [{ x: 40 * TILE, y: 40 * TILE, r: 56 }, ...Object.keys(W.SHRINES).map(k => ({ ...center(k), r: 38 }))];
+const canStand = (x, y) => [[-7, -7], [7, -7], [-7, 7], [7, 7]].every(([dx, dy]) => W.walkable(map, x + dx, y + dy))
+  && SOLID.every(o => Math.hypot(x - o.x, y - o.y) > o.r);
 let focus = null, lift = 0, liftTarget = 0, rising = null;
 const cutscene = () => !!(focus || rising || liftTarget > 0 || ceremony);
 
@@ -263,7 +265,7 @@ function makeFigures() {
   }
   const mk = radialTex([[0, 'rgba(29,27,25,.95)'], [.45, 'rgba(29,27,25,.85)'], [.6, 'rgba(29,27,25,.2)'], [1, 'rgba(29,27,25,0)']], 32);
   marker = new THREE.Sprite(new THREE.SpriteMaterial({ map: mk, transparent: true, depthWrite: false, fog: false }));
-  marker.scale.set(.2, .2, 1); marker.visible = false; scene.add(marker);
+  marker.scale.set(.15, .15, 1); marker.visible = false; scene.add(marker);
   // a soft column of light over the Lantern Summit while the procession walks there
   const bc = document.createElement('canvas'); bc.width = 32; bc.height = 128;
   { const g = bc.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 128);
@@ -365,7 +367,9 @@ function render(t, dt, now) {
     G.g.userData.update && G.g.userData.update(t);
     const on = S.done[k] ? .5 + Math.sin(t * 2 + x) * .12 : 0, sp = speaking === k ? .45 : 0;
     G.glow.material.opacity += (on + sp - G.glow.material.opacity) * Math.min(1, dt * 2);
-    G.glow.position.set(x, y + 1, z); G.glow.visible = G.glow.material.opacity > .01;
+    const far = Math.hypot(x - camera.position.x, z - camera.position.z) > 31;   // nearly lost in the fog
+    G.g.visible = !far;
+    G.glow.position.set(x, y + 1, z); G.glow.visible = !far && G.glow.material.opacity > .01;
   }
   // followers
   for (const f of followers) {
@@ -397,7 +401,7 @@ function render(t, dt, now) {
 }
 
 const guideEl = $('#guide');
-let guideOn = false;
+let guideOn = false, guideW = 0;
 function updateGuide(on) {
   if (on) {
     const s = summit(), x = tiles(s.x), z = tiles(s.y);
@@ -410,8 +414,8 @@ function updateGuide(on) {
       const k = Math.min(.82 / Math.abs(nx || 1e-3), .55 / Math.abs(ny || 1e-3));
       nx *= k; ny *= k;
       const px = (nx + 1) / 2 * vw, py = (1 - ny) / 2 * vh, ang = Math.atan2(-ny, nx);
-      if (!guideOn) { guideEl.hidden = false; guideEl.lastChild.textContent = FT.summitLabel; guideOn = true; }
-      guideEl.style.transform = `translate(${px}px,${py}px)`;
+      if (!guideOn) { guideEl.hidden = false; guideEl.lastChild.textContent = FT.summitLabel; guideOn = true; guideW = guideEl.lastChild.offsetWidth; }
+      guideEl.style.transform = `translate(${Math.max(guideW / 2 + 8, Math.min(vw - guideW / 2 - 8, px))}px,${py}px)`;
       guideEl.firstChild.style.transform = `rotate(${ang}rad)`;
       return;
     }
@@ -574,6 +578,7 @@ function updateProcession(dt, t) {
       const p = trail[n], off = (i % 2 ? 1 : -1) * 6;
       tx = p.x + off; ty = p.y + 4;
     }
+    if (Math.hypot(player.x - fl.x, player.y - fl.y) > 320) { fl.x = player.x - f.x * 40 * (i + 1); fl.y = player.y - f.y * 40 * (i + 1); }   // never lost far behind
     const e = Math.min(1, dt * (fl.visit > 0 ? 1.4 : 3));
     fl.x += (tx - fl.x) * e; fl.y += (ty - fl.y) * e;
   });

@@ -5,12 +5,12 @@
 const CACHE = 'faded-isle-3d-v1';
 const FILES = [
   './', 'index.html', 'style3d.css', 'manifest.webmanifest', 'vendor/three.module.min.js',
-  'game3d.js', 'ink.js', 'world3d.js', 'stubs.js', 'audio3d.js',
+  'game3d.js', 'ink.js', 'world3d.js', 'audio3d.js', 'models.js',
   '../style.css', '../icon-180.png', '../icon-512.png',
   '../world.js', '../content.js', '../audio.js', '../ui.js', '../art.js', '../exercises.js', '../finale.js',
   '../i18n.js', '../lang/fi.js', '../lang/pt.js',
 ];
-const OPTIONAL = ['models.js'];
+const OPTIONAL = [];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE)

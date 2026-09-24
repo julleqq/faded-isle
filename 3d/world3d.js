@@ -250,9 +250,9 @@ export class Island {
         if (R() < .4) rock(S, x + (R() - .5), gy(x, z) , z + (R() - .5), .25 + R() * .25, R);
         shadow(x + .2, z + .2, 1, .15);
       } else if (t === T.TALL) {
-        for (let k = 0; k < 16; k++) {
+        for (let k = 0; k < 13; k++) {
           const gx = tx + R(), gz = ty + R();
-          tuft(P, gx, gy(gx, gz), gz, 7, .5 + R() * .55, R, tallCol(region, R), .22);
+          tuft(P, gx, gy(gx, gz), gz, 6, .5 + R() * .55, R, tallCol(region, R), .22);
         }
       } else if (t === T.GRASS || t === T.BLOCK) {
         for (let k = 0; k < 7; k++) {
@@ -278,7 +278,8 @@ export class Island {
     for (let i = 0; i < B.length; i++) {
       const [S, P] = B[i];
       const grp = new THREE.Group();
-      grp.add(S.build(matS, matO), P.build(matP, null, true));
+      const solid = S.build(matS, matO), plants = P.build(matP, null, true);
+      grp.add(solid, plants); grp.userData.plants = plants;
       const cx = (i % nC) * CH + CH / 2, cz = Math.floor(i / nC) * CH + CH / 2;
       grp.userData.c = new THREE.Vector2(cx, cz);
       this.chunks.push(grp); this.group.add(grp);
@@ -393,20 +394,26 @@ export class Island {
 
   // hide chunks far beyond the fog
   cull(cam) {
-    for (const c of this.chunks) c.visible = Math.hypot(c.userData.c.x - cam.x, c.userData.c.y - cam.z) < 50;
+    for (const c of this.chunks) {                // distance from the camera to the chunk's square
+      const dx = Math.max(0, Math.abs(cam.x - c.userData.c.x) - CH / 2), dz = Math.max(0, Math.abs(cam.z - c.userData.c.y) - CH / 2);
+      const d = Math.hypot(dx, dz);
+      c.visible = d < 38;                        // the fog is opaque paper by then
+      c.userData.plants.visible = d < 20;        // grass further away is lost in the haze anyway
+    }
   }
 }
 
 // ---------- prop makers ----------
 const PINE = ['#3f6e3a', '#2f5a3a', '#557d3d'];
+const CULM = new THREE.CylinderGeometry(1, 1, 1, 5, 1, true), NODE = new THREE.CylinderGeometry(1, 1, 1, 5, 1, true);
 function tree(S, kind, x, y, z, R) {
   const lean = (R() - .5) * .12, rot = R() * 6.28;
   if (kind === 'bamboo') {
     const n = 4 + Math.floor(R() * 3);
     for (let i = 0; i < n; i++) {
       const bx = x + (R() - .5) * .8, bz = z + (R() - .5) * .8, h = 3.4 + R() * 1.8, l = (R() - .5) * .14;
-      S.add(GEO.cyl, M(bx, y + h / 2, bz, l, 0, l * .7, .05, h, .05), R() < .5 ? '#5b8a45' : '#6b9a4f');
-      for (let k = 1; k < 4; k++) S.add(GEO.cyl, M(bx + l * k * h / 4 * .7, y + k * h / 4, bz - l * k * h / 4, l, 0, l * .7, .062, .03, .062), '#2f4a2a', { outline: false });
+      S.add(CULM, M(bx, y + h / 2, bz, l, 0, l * .7, .05, h, .05), R() < .5 ? '#5b8a45' : '#6b9a4f');
+      for (let k = 1; k < 4; k++) S.add(NODE, M(bx + l * k * h / 4 * .7, y + k * h / 4, bz - l * k * h / 4, l, 0, l * .7, .062, .03, .062), '#2f4a2a', { outline: false });
       for (let k = 0; k < 3; k++) {
         const lh = y + h * (.62 + k * .14), a = R() * 6.28;
         S.add(GEO.ico, M(bx + Math.cos(a) * .25, lh, bz + Math.sin(a) * .25, 0, a, .5, .42, .1, .2), R() < .5 ? '#3f7a3a' : '#4e8a45');
