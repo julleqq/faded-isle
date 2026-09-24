@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Island Sound Preview</title>
+<style>
+  :root { --paper: #efe7d6; --ink: #1d1b19; --mute: #6e6a5e; }
+  @media (prefers-color-scheme: dark) { :root { --paper: #1f1d1a; --ink: #ece7dc; --mute: #a39d8f; } }
+  body { margin: 0; padding: 16px; background: var(--paper); color: var(--ink); font: 15px/1.4 system-ui, sans-serif; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+  button { font: inherit; padding: 6px 12px; border: 1px solid var(--ink); background: transparent; color: var(--ink); border-radius: 6px; }
+  canvas { max-width: 100%; height: auto; border: 1px solid var(--mute); image-rendering: pixelated; touch-action: none; }
+  pre { font-size: 12px; white-space: pre-wrap; color: var(--mute); }
+</style>
+</head>
+<body>
+<h1 style="font-size:18px;margin:0 0 4px">Island sound preview</h1>
+<p style="margin:0;color:var(--mute)">Tap Start, then tap or drag on the map to stand there (arrow keys turn). Headphones help.</p>
+<div class="row">
+  <button id="start">Start</button>
+  <button id="walk">Walk the route</button>
+  <label>Dusk <input id="dusk" type="range" min="0" max="1" step="0.05" value="0"></label>
+  <label><input id="pause" type="checkbox"> Panel open</label>
+  <label><input id="done" type="checkbox"> All shrines done</label>
+</div>
+<canvas id="map" width="320" height="320"></canvas>
+<pre id="log"></pre>
+<script type="module">
+import * as audio from '../audio.js';
+import { buildMap, T, N } from '../world.js';
+import * as a3 from './audio3d.js';
+
+const map = buildMap();
+const cv = document.getElementById('map'), ctx = cv.getContext('2d'), S = cv.width / N;
+const COL = { [T.SEA]: '#5f9fb5', [T.SAND]: '#e3cc98', [T.GRASS]: '#94b86a', [T.TALL]: '#6f8f45', [T.WATER]: '#4f95b0',
+  [T.PATH]: '#e6d6b0', [T.BRIDGE]: '#9b6b43', [T.FOREST]: '#3f6e3a', [T.ROCK]: '#9d9a88', [T.STONE]: '#b8b3a3', [T.BLOCK]: '#1d1b19' };
+const SURF = { [T.SAND]: 'sand', [T.GRASS]: 'grass', [T.TALL]: 'tall', [T.PATH]: 'path', [T.BRIDGE]: 'bridge', [T.STONE]: 'stone', [T.WATER]: 'water' };
+const WALK = new Set([T.SAND, T.GRASS, T.TALL, T.PATH, T.BRIDGE, T.STONE]);
+const tile = (x, z) => map.g[Math.floor(z) * N + Math.floor(x)];
+
+let P = { x: 40.5, z: 45, yaw: 0 }, started = false, maxPanners = 0, stepAcc = 0;
+const errors = [];
+addEventListener('error', e => errors.push(String(e.message)));
+addEventListener('unhandledrejection', e => errors.push(String(e.reason)));
+
+function draw(info) {
+  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) { ctx.fillStyle = COL[map.g[z * N + x]]; ctx.fillRect(x * S, z * S, S, S); }
+  ctx.fillStyle = '#c4552f'; ctx.beginPath(); ctx.arc(P.x * S, P.z * S, 4, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#c4552f'; ctx.beginPath(); ctx.moveTo(P.x * S, P.z * S);
+  ctx.lineTo((P.x - Math.sin(P.yaw) * 4) * S, (P.z - Math.cos(P.yaw) * 4) * S); ctx.stroke();
+  if (info) document.getElementById('log').textContent =
+    `at ${P.x.toFixed(1)}, ${P.z.toFixed(1)}  panners ${info.panners} (max ${maxPanners})  ambience rms ${info.level.toFixed(4)}\n` +
+    info.voices.map(v => `${v.id.padEnd(18)} target ${v.target.toFixed(3)}  dist ${v.dist}  rms ${v.rms ?? '-'}${v.dying ? '  (fading)' : ''}${v.chord != null ? '  chord ' + v.chord : ''}`).join('\n');
+}
+
+function begin() {
+  if (started) return; started = true;
+  audio.start(); a3.init(map); a3.debug(true);
+  let last = performance.now();
+  const frame = now => {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    a3.update(P.x, P.z, P.yaw);
+    const info = a3.debug();
+    maxPanners = Math.max(maxPanners, info.panners);
+    if (P.moving) { stepAcc += dt; if (stepAcc > 0.45) { stepAcc = 0; a3.step(SURF[tile(P.x, P.z)] || 'grass'); } }
+    draw(info);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+function nearestWalkable(x, z) {
+  for (let r = 0; r < 12; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+    const tx = Math.floor(x) + dx, tz = Math.floor(z) + dz;
+    if (Math.max(Math.abs(dx), Math.abs(dz)) === r && tx >= 0 && tz >= 0 && tx < N && tz < N && WALK.has(map.g[tz * N + tx])) return { x: tx + 0.5, z: tz + 0.5 };
+  }
+  return { x, z };
+}
+// A sand tile touching the sea, near (x, z).
+function shoreNear(x, z) {
+  let best = null, bd = 1e9;
+  for (let tz = 1; tz < N - 1; tz++) for (let tx = 1; tx < N - 1; tx++) {
+    if (map.g[tz * N + tx] !== T.SAND) continue;
+    if (![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => map.g[(tz + b) * N + tx + a] === T.SEA)) continue;
+    const d = Math.hypot(tx - x, tz - z); if (d < bd) { bd = d; best = { x: tx + 0.5, z: tz + 0.5 }; }
+  }
+  return best;
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+async function walkTo(to, speed = 12) {
+  P.moving = true;
+  while (true) {
+    const dx = to.x - P.x, dz = to.z - P.z, d = Math.hypot(dx, dz);
+    if (d < 0.2) break;
+    P.yaw = Math.atan2(-dx, -dz);
+    const s = Math.min(d, speed / 60); P.x += dx / d * s; P.z += dz / d * s;
+    await wait(16);
+  }
+  P.moving = false;
+}
+// Average per-voice loudness over a second.
+async function listen() {
+  const sum = {}, dist = {}; let level = 0, n = 0;
+  for (let i = 0; i < 20; i++) {
+    const info = a3.debug(); level += info.level; n++;
+    for (const v of info.voices) if (!v.dying) { sum[v.id] = (sum[v.id] || 0) + (v.rms || 0); dist[v.id] = v.dist; }
+    await wait(100);
+  }
+  for (const k in sum) sum[k] /= n;
+  const dom = Object.entries(sum).sort((a, b) => b[1] - a[1])[0];
+  return { level: level / n, voices: sum, dist, dominant: dom ? dom[0] : null, panners: a3.debug().panners };
+}
+
+const STOPS = [
+  { name: 'grove', at: () => nearestWalkable(24, 21), expect: 'grove' },
+  { name: 'tree', at: () => nearestWalkable(42, 42), expect: 'tree' },
+  { name: 'stream', at: () => nearestWalkable(55, 16.5), expect: 'river' },
+  { name: 'maples', at: () => nearestWalkable(58, 26), expect: null },
+  { name: 'shore', at: () => shoreNear(75, 45), expect: 'sea' },
+  { name: 'pond', at: () => nearestWalkable(61.5, 47), expect: 'pond' },
+  { name: 'beach', at: () => shoreNear(40, 76), expect: 'sea' },
+  { name: 'lake', at: () => nearestWalkable(19, 40.5), expect: 'lake' },
+  { name: 'summit', at: () => nearestWalkable(41, 13), expect: 'summit' },
+  { name: 'tall grass at dusk', at: () => { for (let i = 0; i < N * N; i++) if (map.g[i] === T.TALL && Math.hypot(i % N - 30, (i / N | 0) - 50) < 12) return { x: i % N + 0.5, z: (i / N | 0) + 0.5 }; return nearestWalkable(30, 50); },
+    before: () => a3.setDusk(1), expect: 'crickets', after: () => a3.setDusk(0) },
+  { name: 'self-as-context shrine, done', at: () => nearestWalkable(23, 42), before: () => a3.setShrineDone('selfctx', true), expect: null, chordOf: 'shrine:selfctx' },
+];
+
+async function run() {
+  begin();
+  await wait(1500);
+  const results = [];
+  for (const st of STOPS) {
+    const to = st.at();
+    if (st.before) st.before();
+    await walkTo(to);
+    await wait(1800);
+    const r = await listen();
+    const chord = st.chordOf ? (a3.debug().voices.find(v => v.id === st.chordOf) || {}).chord : undefined;
+    results.push({ stop: st.name, at: [to.x, to.z], tile: tile(to.x, to.z), expect: st.expect, ...r, chord });
+    if (st.after) st.after();
+  }
+  // Steps on every surface, and ducking.
+  for (const s of ['grass', 'sand', 'path', 'bridge', 'stone', 'water', 'tall']) { a3.step(s); await wait(250); }
+  const before = a3.debug().bus; a3.pause(true); await wait(1500);
+  const ducked = a3.debug().bus; a3.pause(false);
+  return { results, maxPanners, errors, duck: { before, ducked } };
+}
+window.PREVIEW = { run, get maxPanners() { return maxPanners; } };
+
+document.getElementById('start').onclick = begin;
+document.getElementById('walk').onclick = () => run().then(r => console.log(r));
+document.getElementById('dusk').oninput = e => a3.setDusk(+e.target.value);
+document.getElementById('pause').onchange = e => a3.pause(e.target.checked);
+document.getElementById('done').onchange = e => { for (const k of ['present', 'defusion', 'acceptance', 'selfctx', 'values', 'action']) a3.setShrineDone(k, e.target.checked); };
+const drag = e => { if (!started) return; const r = cv.getBoundingClientRect(); P.x = (e.clientX - r.left) / r.width * N; P.z = (e.clientY - r.top) / r.height * N; };
+cv.addEventListener('pointerdown', e => { begin(); drag(e); cv.onpointermove = drag; });
+addEventListener('pointerup', () => { cv.onpointermove = null; });
+addEventListener('keydown', e => { if (e.key === 'ArrowLeft') P.yaw += 0.15; if (e.key === 'ArrowRight') P.yaw -= 0.15; });
+draw();
+</script>
+</body>
+</html>

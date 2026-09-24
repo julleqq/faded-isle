@@ -167,3 +167,6 @@ export function toggleMute() {
   if (master) master.gain.setTargetAtTime(muted ? 0 : 0.9, ac.currentTime, 0.1);
   return muted;
 }
+
+// For the 3D ambience module: the shared context and master gain (null before start()).
+export function context() { return ac ? { ac, master } : null; }
