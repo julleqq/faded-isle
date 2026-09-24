@@ -33,7 +33,7 @@ const lerpC = (a, b, t) => a.clone().lerp(b, t);
 const col = h => new THREE.Color(h);
 
 // ---------- heights ----------
-const BASE = { [T.SEA]: -1.5, [T.WATER]: -0.9, [T.BRIDGE]: -0.9, [T.STONE]: -0.9, [T.SAND]: 0.12, [T.PATH]: 0.32 };
+const BASE = { [T.SEA]: -1.5, [T.WATER]: -0.9, [T.BRIDGE]: -0.9, [T.STONE]: -0.55, [T.SAND]: 0.12, [T.PATH]: 0.32 };
 const baseH = t => BASE[t] ?? 0.36;
 function extras(x, y) {                          // hills and the mountain, on land only
   const dc = dist(x, y, C0.x, C0.y);
@@ -82,7 +82,7 @@ export class Island {
   groundY(x, z) {
     const t = this.tile(Math.floor(x), Math.floor(z));
     if (t === T.BRIDGE) return .5;
-    if (t === T.STONE) return .3;
+    if (t === T.STONE) return .2;
     return Math.max(this.terrainY(x, z), -0.2);
   }
 
@@ -102,8 +102,8 @@ export class Island {
     const paper = col('#efe7d6');
     const tcol = {};
     const tileCol = (t, tx, ty) => {
-      if (t === T.SAND) return col('#e6d3a6');
-      if (t === T.PATH || t === T.BRIDGE) return col('#eadcb8');
+      if (t === T.SAND) return col('#e9dbb8');
+      if (t === T.PATH || t === T.BRIDGE) return col('#ebe0c4');
       if (t === T.ROCK) return col('#a8a594');
       if (t === T.SEA || t === T.WATER || t === T.STONE) return col('#b9b49a');
       const r = W.regionAt(tx * TILE + 16, ty * TILE + 16);
@@ -307,7 +307,7 @@ export class Island {
     // summit: unlit paper lanterns on posts around the owl
     { const s = W.SHRINES.values;
       for (let i = 0; i < 5; i++) {
-        const a = -Math.PI / 2 + (i - 2) * .55 + Math.PI, x = s.x + .5 + Math.cos(a) * 3.2, z = s.y + .5 + Math.sin(a) * 2.8, y = gy(x, z);
+        const a = -Math.PI / 2 + (i - 2) * .62, x = s.x + .5 + Math.cos(a) * 3.4, z = s.y + .5 + Math.sin(a) * 2.6, y = gy(x, z);
         const [S] = at(x, z);
         S.add(trunk(.05, .04, 1.5, 5), M(x, y, z), '#5a4330');
         S.add(GEO.box, M(x + .18, y + 1.45, z, 0, 0, 0, .42, .04, .04), '#5a4330');
@@ -343,7 +343,7 @@ export class Island {
     }
     for (let tx = 61; tx <= 65; tx++) {
       const x = tx + .5 + (R() - .5) * .1, z = 50.5 + (R() - .5) * .15, [S] = at(x, z);
-      S.add(GEO.cyl12, M(x, .06, z, 0, R(), 0, .42, .44, .38), '#b8b3a3');
+      S.add(GEO.cyl12, M(x, -.02, z, 0, R(), 0, .36, .42, .32), '#b8b3a3');
     }
     { const P = W.SHRINES.action;                // lily pads on the pond
       for (let i = 0; i < 11; i++) {
@@ -355,31 +355,36 @@ export class Island {
       } }
     // the Great Tree (own group: it should never be culled with a chunk)
     const GT = new Builder(), x0 = C0.x, z0 = C0.y, y0 = gy(x0, z0) - .1;
-    GT.add(trunk(1.05, .6, 4.6, 9), M(x0, y0, z0, 0, 0, .04), '#4a3526');
-    for (let i = 0; i < 6; i++) {                // roots
-      const a = i / 6 * Math.PI * 2 + .3;
-      GT.add(GEO.cone, M(x0 + Math.cos(a) * .9, y0 + .15, z0 + Math.sin(a) * .9, 0, 0, 0, .35, .5, .35).multiply(new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)), -1.1)), '#44311f');
+    const bark = '#5b4332', under = v => .78 + .22 * Math.max(0, Math.min(1, v.y + .5));   // blossom clumps darker underneath
+    GT.add(trunk(1.0, .72, 2.4, 11), M(x0, y0, z0, 0, 0, .03), bark);
+    GT.add(trunk(.74, .5, 2.2, 10), M(x0 + .1, y0 + 2.3, z0 - .05, .06, 0, -.07), bark);
+    for (let i = 0; i < 7; i++) {                // roots spreading into the ground
+      const a = i / 7 * Math.PI * 2 + .3, l = 1.1 + R() * .5;
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(Math.cos(a), -.55, Math.sin(a)).normalize());
+      GT.add(new THREE.CylinderGeometry(.08, .32, 1, 6), new THREE.Matrix4().compose(new THREE.Vector3(x0 + Math.cos(a) * (.55 + l * .4), y0 + .28, z0 + Math.sin(a) * (.55 + l * .4)), q, new THREE.Vector3(1, l, 1)), '#54402f');
     }
-    const blossoms = ['#f0b7c3', '#e59aae', '#f7d4db', '#fbe7ea'];
+    const blossoms = ['#f0b7c3', '#e8a3b5', '#f7d4db', '#f4c3cf'];
     const branchEnds = [];
-    for (let i = 0; i < 7; i++) {
-      const a = i / 7 * Math.PI * 2 + R() * .4, len = 3 + R() * 1.4, up = .55 + R() * .35;
-      const sx = x0, sy = y0 + 3.6 + R() * .6, sz = z0;
-      const ex = sx + Math.cos(a) * len, ey = sy + up * len * .8, ez = sz + Math.sin(a) * len;
-      const dir = new THREE.Vector3(ex - sx, ey - sy, ez - sz), L = dir.length();
-      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
-      const m = new THREE.Matrix4().compose(new THREE.Vector3((sx + ex) / 2, (sy + ey) / 2, (sz + ez) / 2), q, new THREE.Vector3(.2, L, .2));
-      GT.add(new THREE.CylinderGeometry(.55, 1, 1, 6), m, '#4a3526');
-      branchEnds.push([ex, ey, ez]);
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2 + R() * .5, len = 3.2 + R() * 1.6, up = .45 + R() * .4;
+      const sx = x0, sy = y0 + 3.4 + R() * 1.2, sz = z0;
+      const mx = sx + Math.cos(a) * len * .5, my = sy + up * len * .55 + .3, mz = sz + Math.sin(a) * len * .5;
+      const ex = sx + Math.cos(a) * len, ey = sy + up * len * .75, ez = sz + Math.sin(a) * len;
+      for (const [ax, ay, az, bx, by, bz, r] of [[sx, sy, sz, mx, my, mz, .26], [mx, my, mz, ex, ey, ez, .16]]) {
+        const dir = new THREE.Vector3(bx - ax, by - ay, bz - az), L = dir.length();
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+        GT.add(new THREE.CylinderGeometry(.62, 1, 1, 6), new THREE.Matrix4().compose(new THREE.Vector3((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2), q, new THREE.Vector3(r, L * 1.04, r)), bark);
+      }
+      branchEnds.push([ex, ey, ez], [mx, my + .2, mz]);
     }
-    for (let i = 0; i < 46; i++) {
+    for (let i = 0; i < 56; i++) {
       const [bx, by, bz] = branchEnds[i % branchEnds.length];
-      const r = .9 + R() * .9;
-      GT.add(GEO.ico, M(bx + (R() - .5) * 2.4, by + (R() - .3) * 1.4, bz + (R() - .5) * 2.4, R() * 3, R() * 3, 0, r, r * .75, r), blossoms[i % 4]);
+      const r = .75 + R() * .8;
+      GT.add(GEO.ico1, M(bx + (R() - .5) * 2.2, by + (R() - .2) * 1.2, bz + (R() - .5) * 2.2, R() * 3, R() * 3, 0, r, r * .72, r), blossoms[i % 4], { shade: under });
     }
-    for (let i = 0; i < 14; i++) {               // a crown in the middle
-      const r = 1.1 + R() * .8, a = R() * 6.28, d = R() * 1.8;
-      GT.add(GEO.ico, M(x0 + Math.cos(a) * d, y0 + 7.4 + R() * 1.4, z0 + Math.sin(a) * d, R() * 3, R() * 3, 0, r, r * .8, r), blossoms[(i + 1) % 4]);
+    for (let i = 0; i < 16; i++) {               // a crown in the middle
+      const r = 1 + R() * .8, a = R() * 6.28, d = R() * 2;
+      GT.add(GEO.ico1, M(x0 + Math.cos(a) * d, y0 + 7 + R() * 1.6, z0 + Math.sin(a) * d, R() * 3, R() * 3, 0, r, r * .75, r), blossoms[(i + 1) % 4], { shade: under });
     }
     shadow(x0, z0, 6.5, .32);
     this.greatTree = GT.build(this.matSolid || (this.matSolid = inkMat({ flat: true })), this.matOutline || (this.matOutline = outlineMat()));

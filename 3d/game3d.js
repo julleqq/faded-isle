@@ -18,11 +18,11 @@ import { LANGS, lang, setLang, fmt } from '../i18n.js';
 import * as I18N from '../i18n.js';
 import { U as IU, makeWash, radialTex, PAPER } from './ink.js';
 import { Island, makeSky, makeMountains, blobShadow } from './world3d.js';
+import * as A3 from './audio3d.js';                // spatial ambience and footsteps
 const FT = FIN.TEXT, U = C.UI;
 
-// Figures come from models.js; stubs.js stands in if it is missing. Spatial sound is optional.
+// Figures come from models.js; stubs.js stands in if it is missing.
 const MODELS = await import('./models.js').catch(() => import('./stubs.js'));
-const A3 = await import('./audio3d.js').catch(() => null);
 
 const SAVE_KEY = 'fadedisle3d.v1', MASK_KEY = 'fadedisle3d.mask', MOTION_KEY = 'fadedisle3d.reducemotion';
 const MS = 8;                       // reveal mask is 1/8 of the 2D world's pixels (4 texels per tile)
@@ -30,6 +30,8 @@ const SPEED = 74;                   // world px per second (≈ 2.3 tiles/s: an 
 const $ = s => document.querySelector(s);
 const EYE = { monk: 1.12, crane: 1.02, fox: .56, drop: .5 };
 const tiles = v => v / TILE;
+// Start a few steps further south than the 2D game, so the Great Tree stands whole in front of you.
+const START3D = { x: W.START.x, y: W.START.y + 3.5 * TILE };
 
 // ---------- state & saving ----------
 const fresh = () => ({ char: null, pos: null, yaw: 0, done: {}, spirits: {}, verses: {}, values: [], valueNote: '', steps: [], ended: false, tip: false });
@@ -166,7 +168,7 @@ function inputVector() {                         // x: strafe right, y: forward
 const fwd = () => ({ x: Math.sin(player.yaw), y: -Math.cos(player.yaw) });
 
 // ---------- update ----------
-let mode = 'title', grassWalk = 0, nextEnc = 300, lastRegion = null, saveT = 0, seaT = 0, lastStep = 0;
+let mode = 'title', grassWalk = 0, nextEnc = 300, lastRegion = null, saveT = 0, lastStep = 0;
 const canStand = (x, y) => [[-7, -7], [7, -7], [-7, 7], [7, 7]].every(([dx, dy]) => W.walkable(map, x + dx, y + dy));
 let focus = null, lift = 0, liftTarget = 0, rising = null;
 const cutscene = () => !!(focus || rising || liftTarget > 0 || ceremony);
@@ -211,7 +213,7 @@ function update(dt, t) {
     if (moved > 0) {
       player.moving = true; player.phase += moved / TILE * 4.2;
       const tile = W.tileAt(map, player.x, player.y);
-      if (Math.floor(player.phase / Math.PI) !== lastStep) { lastStep = Math.floor(player.phase / Math.PI); A3?.step?.(SURF[tile] || 'grass'); }
+      if (Math.floor(player.phase / Math.PI) !== lastStep) { lastStep = Math.floor(player.phase / Math.PI); A3.step(SURF[tile] || 'grass'); }
       if (tile === T.TALL) {
         grassWalk += moved;
         if (grassWalk > nextEnc && !procession) { grassWalk = 0; nextEnc = 260 + Math.random() * 380; encounter(); }
@@ -230,11 +232,6 @@ function update(dt, t) {
   const region = W.regionAt(player.x, player.y);
   if (region !== lastRegion) { lastRegion = region; if (region) ui.toast(C.PILLARS[region].region); }
 
-  if ((seaT += dt) > 0.5) {
-    seaT = 0; let wet = 0;
-    for (let a = 0; a < 8; a++) { const tt = W.tileAt(map, player.x + Math.cos(a * .785) * 120, player.y + Math.sin(a * .785) * 120); if (tt === T.SEA || tt === T.WATER) wet++; }
-    audio.setSea(wet / 8);
-  }
   if ((saveT += dt) > 5) { saveT = 0; S.pos = { x: player.x, y: player.y }; S.yaw = look.yaw; save(); saveMask(); }
 }
 const SURF = { [T.GRASS]: 'grass', [T.TALL]: 'tall', [T.SAND]: 'sand', [T.PATH]: 'path', [T.BRIDGE]: 'bridge', [T.STONE]: 'stone' };
@@ -351,7 +348,7 @@ function render(t, dt, now) {
   sky.position.copy(camera.position);
   island.cull(camera.position);
   // dusk
-  IU.uDusk.value = dusk;
+  IU.uDusk.value = dusk; A3.setDusk(dusk);
   scene.fog.color.copy(PAPER_C).lerp(DUSK_FOG, dusk);
   renderer.setClearColor(scene.fog.color);
   hemi.intensity = Math.PI * (.72 - dusk * .08); sun.color.setRGB(1, .95 - dusk * .15, .86 - dusk * .3);
@@ -395,7 +392,7 @@ function render(t, dt, now) {
   if (lanternObj) updateLantern(t);
   if (viewmodel) { viewmodel.visible = mode === 'play' && lift < .5; viewmodel.userData.update && viewmodel.userData.update(t, player.phase, player.moving); }
   updatePetals(dt, t);
-  A3?.update?.(camera.position.x, camera.position.z, player.yaw);
+  A3.update(camera.position.x, camera.position.z, camera.rotation.y);
   renderer.render(scene, camera);
 }
 
@@ -423,7 +420,7 @@ function updateGuide(on) {
 }
 
 // ---------- frame loop (+ a gentle resolution drop if a phone struggles) ----------
-let last = performance.now(), perfT = 0, perfN = 0, perfSum = 0;
+let last = performance.now(), shown = true, perfT = 0, perfN = 0, perfSum = 0;
 const perf = { fps: 0, calls: 0, tris: 0, quality: 1 };
 const panelEl = $('#panel');
 function frame(now) {
@@ -433,7 +430,7 @@ function frame(now) {
   // Skip drawing the world while an opaque panel covers it (only the title screen is see-through),
   // so the main thread stays free to answer taps.
   const visible = panelEl.hidden || panelEl.classList.contains('titlescreen');
-  A3?.pause?.(!visible);
+  if (visible !== shown) { shown = visible; A3.pause(!visible); }
   if (visible) {
     render(t, dt, now);
     perf.calls = renderer.info.render.calls; perf.tris = renderer.info.render.triangles;
@@ -492,7 +489,7 @@ async function meet(k) {
   ui.closePanel();
   if (again) { save(); return; }
   S.done[k] = true; save(); updateHud();
-  A3?.setShrineDone?.(k, true);
+  A3.setShrineDone(k, true);
   const c = center(k);
   bloom(c.x, c.y, 11 * TILE, 3);
   if (doneCount() === 6) await ui.say(U.sixDone);
@@ -543,7 +540,6 @@ function guardPos(k) {
 }
 function startProcession(resume) {
   procession = true; duskTarget = 1; if (resume) dusk = 1;
-  A3?.setDusk?.(1);
   trail.length = 0; gathered.clear();
   if (S.finaleGathered) Object.keys(GATHER).forEach(k => gathered.add(k));
   clearFollowers();
@@ -557,7 +553,7 @@ function startProcession(resume) {
   });
 }
 function clearFollowers() { for (const f of followers) scene.remove(f.obj); followers = []; }
-function stopProcession() { procession = false; clearFollowers(); gathered.clear(); trail.length = 0; A3?.setDusk?.(0); }
+function stopProcession() { procession = false; clearFollowers(); gathered.clear(); trail.length = 0; }
 function updateProcession(dt, t) {
   dusk += (duskTarget - dusk) * Math.min(1, dt * .35);
   if (!procession || !followers.length) return;
@@ -982,7 +978,7 @@ function title() {
 
 async function begin(isNew) {
   audio.start();
-  A3?.init?.(map);
+  A3.init(map);
   if (isNew) {
     S = fresh();
     try { localStorage.removeItem(MASK_KEY); } catch (e) {}
@@ -1006,13 +1002,13 @@ async function begin(isNew) {
     ui.closePanel();
     S.pos = null; S.yaw = 0;
   }
-  const pos = S.pos || W.START;
+  const pos = S.pos || START3D;
   player.x = pos.x; player.y = pos.y; player.vx = player.vy = 0;
-  look.yaw = player.yaw = S.yaw || 0; look.pitch = player.pitch = -.08;
+  look.yaw = player.yaw = S.yaw || 0; look.pitch = player.pitch = S.pos ? -.08 : .1;
   player.camY = island.groundY(tiles(player.x), tiles(player.y)) + (EYE[S.char] || 1);
   setCharacter(S.char);
   stopProcession(); dusk = duskTarget = 0; liftTarget = lift = 0; lanternT = null; focus = null;
-  C.PILLAR_ORDER.forEach(k => A3?.setShrineDone?.(k, !!S.done[k]));
+  C.PILLAR_ORDER.forEach(k => A3.setShrineDone(k, !!S.done[k]));
   showLantern();
   mode = 'play'; $('#hud').hidden = false; updateHud(); save();
   guardBack();
