@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Figure Preview</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #efe7d6; overflow: hidden; font: 13px/1.4 Georgia, serif; color: #1d1b19; }
+  canvas { display: block; }
+  #ui { position: fixed; left: 8px; top: 8px; display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 16px); }
+  #ui button { background: #f7f3ea; border: 1px solid #1d1b19; border-radius: 4px; padding: 4px 8px; font: inherit; cursor: pointer; }
+  #info { position: fixed; left: 8px; bottom: 8px; background: rgba(247,243,234,.85); padding: 4px 8px; border-radius: 4px; white-space: pre; }
+  body.shot #ui, body.shot #info { display: none; }
+</style>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<div id="ui"></div>
+<div id="info"></div>
+<script type="module">
+import * as THREE from 'three';
+import { U, makeWash, inkMat, outlineMat, Builder, M, GEO, trunk } from './ink.js';
+const maskMat = () => { const m = inkMat({ reveal: 'mask' }); m.defines = {}; return m; };   // (ink.js sets sh.defines.REVEAL_MASK; Lambert has no defines object by default)
+import { makeBody, makeViewmodel, makeGuardian, makeSpirit, EYE_HEIGHT } from './models.js';
+
+const P = new URLSearchParams(location.search);
+const group = P.get('group') || 'bodies';
+let ink = P.get('ink') === '1', colored = P.get('color') !== '0';
+const freeze = P.has('t') ? +P.get('t') : null;
+const yaw = P.has('yaw') ? +P.get('yaw') : null;
+if (P.has('shot')) document.body.classList.add('shot');
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const tex1 = v => { const t = new THREE.DataTexture(new Uint8Array([v, v, v, v]), 1, 1); t.needsUpdate = true; return t; };
+const WHITE = tex1(255), BLACK = tex1(0);
+U.uWash.value = makeWash();
+const setInk = () => { U.uMask.value = ink ? BLACK : WHITE; };
+setInk();
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xefe7d6);
+scene.fog = new THREE.Fog(0xefe7d6, 7, 26);
+scene.add(new THREE.HemisphereLight(0xfff4e2, 0xb3a58a, 2.3));
+const sun = new THREE.DirectionalLight(0xfff8ee, 1.6); sun.position.set(-3, 6, 5); scene.add(sun);
+
+// paper ground with a few props
+const gb = new Builder();
+gb.add(new THREE.CircleGeometry(40, 48), M(0, 0, 0, -Math.PI / 2), 0xb9b58a, { outline: false });
+const R = (() => { let s = 3; return () => ((s = (s * 16807) % 2147483647) / 2147483647); })();
+for (let i = 0; i < 40; i++) {
+  const a = R() * 6.28, d = 6 + R() * 16, x = Math.cos(a) * d, z = Math.sin(a) * d - 4;
+  if (R() < .5) { gb.add(trunk(.12, .08, 1.6), M(x, 0, z), 0x6b5a48); gb.add(GEO.ico1, M(x, 2.1, z, 0, 0, 0, .9, 1, .9), 0x7a9a5a); }
+  else gb.add(GEO.dodec, M(x, .2, z, R(), R(), 0, .5, .35, .45), 0x8f897c);
+}
+scene.add(gb.build(maskMat(), outlineMat()));
+
+const camera = new THREE.PerspectiveCamera(P.has('fov') ? +P.get('fov') : 45, innerWidth / innerHeight, .05, 200);
+scene.add(camera);
+const figs = [];   // {obj, kind, id}
+const IDS = {
+  bodies: ['monk', 'fox', 'drop', 'crane'],
+  guardians: ['present', 'defusion', 'acceptance', 'selfctx', 'values', 'action'],
+  spirits: ['worry', 'doubt', 'regret', 'sorrow', 'ember', 'shame', 'restless', 'cant'],
+};
+const only = P.get('only');
+let vm = null, vmId = P.get('vm') || 'monk';
+const walking = P.get('walk') === '1';
+
+if (group === 'vm') {
+  camera.fov = P.has('fov') ? +P.get('fov') : 70; camera.updateProjectionMatrix();
+  camera.position.set(0, EYE_HEIGHT[vmId], 4); camera.lookAt(0, EYE_HEIGHT[vmId] * .8, -6);
+  const g = makeGuardian('selfctx'); g.position.set(.6, 0, -2.5); g.rotation.y = -.4; g.userData.setColored(colored, true); scene.add(g); figs.push({ obj: g, kind: 'g' });
+  if (P.get('wall') === '1') {            // a wall right in front of the face, to prove the viewmodel never clips
+    const wb = new Builder().add(GEO.box, M(0, 1, 0, 0, 0, 0, 3, 3, .2), 0x9a8f7a);
+    const w = wb.build(maskMat(), outlineMat()); w.position.set(0, 0, 4 - .22); scene.add(w);
+  }
+  vm = makeViewmodel(vmId); camera.add(vm);
+} else {
+  const ids = only ? [only] : IDS[group];
+  const gap = group === 'spirits' ? 1.15 : group === 'bodies' ? 1.4 : 1.9;
+  ids.forEach((id, i) => {
+    const o = group === 'bodies' ? makeBody(id) : group === 'guardians' ? makeGuardian(id) : makeSpirit(id);
+    o.position.x = (i - (ids.length - 1) / 2) * gap;
+    if (group === 'guardians') o.userData.setColored(colored && !ink, true);
+    scene.add(o); figs.push({ obj: o, kind: group, id });
+  });
+  const width = (ids.length - 1) * gap + 1.5;
+  const eye = group === 'spirits' ? 1.1 : 1.45;
+  const dist = only ? (P.has('dist') ? +P.get('dist') : 3) : Math.max(4, width * .5 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.max(.6, camera.aspect) * 1.1);
+  camera.position.set(0, eye, dist);
+  camera.lookAt(0, group === 'spirits' ? .55 : .85, 0);
+}
+
+// per-figure draw calls
+const calls = {};
+function measure() {
+  const all = [...scene.children];
+  renderer.info.autoReset = false;
+  for (const f of figs.filter(f => f.id)) {
+    all.forEach(c => { c.userData.__v = c.visible; if (c !== f.obj && c !== camera) c.visible = !!c.isLight; });
+    renderer.info.reset(); renderer.render(scene, camera);
+    calls[f.id] = renderer.info.render.calls;
+    all.forEach(c => c.visible = c.userData.__v);
+  }
+  if (vm) {
+    all.forEach(c => { c.userData.__v = c.visible; if (c !== camera) c.visible = !!c.isLight; });
+    renderer.info.reset(); renderer.render(scene, camera);
+    calls['viewmodel:' + vmId] = renderer.info.render.calls;
+    all.forEach(c => c.visible = c.userData.__v);
+  }
+  renderer.info.autoReset = true;
+  window.__calls = calls;
+}
+
+const ui = document.getElementById('ui'), info = document.getElementById('info');
+const btn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = fn; ui.appendChild(b); };
+btn('ink / colour', () => { ink = !ink; setInk(); figs.forEach(f => f.kind === 'guardians' && f.obj.userData.setColored(!ink && colored)); });
+btn('grey / colour guardians & calm', () => { colored = !colored; figs.forEach(f => f.kind === 'guardians' && f.obj.userData.setColored(colored)); });
+for (const g of ['bodies', 'guardians', 'spirits', 'vm']) btn(g, () => { P.set('group', g); location.search = P; });
+if (group === 'vm') for (const id of IDS.bodies) btn('vm ' + id, () => { P.set('vm', id); location.search = P; });
+
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+
+const clock = new THREE.Clock();
+let calm = colored ? 1 : 0, frames = 0;
+function frame() {
+  const t = freeze ?? clock.getElapsedTime();
+  U.uTime.value = t;
+  const phase = walking ? t * 5 : 0;
+  for (const f of figs) {
+    if (f.kind === 'bodies') f.obj.userData.update(t, phase, walking);
+    else if (f.kind === 'spirits') { calm += ((colored ? 1 : 0) - calm) * (freeze != null ? 1 : .03); f.obj.userData.update(t, P.has('calm') ? +P.get('calm') : calm); }
+    else f.obj.userData.update(t);
+    if (f.id) f.obj.rotation.y = yaw ?? t * .35;
+  }
+  if (vm) vm.userData.update(t, phase, walking);
+  renderer.render(scene, camera);
+  if (++frames === 3) { measure(); info.textContent = 'draw calls: ' + JSON.stringify(calls); window.__ready = true; }
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body>
+</html>
