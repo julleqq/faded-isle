@@ -574,11 +574,11 @@ function updateProcession(dt, t) {
       if (!canStand(tx, ty)) fl.visit = 0;
     }
     if (!(fl.visit > 0)) {
-      const n = 8 * (i + 1); if (n >= trail.length) return;
-      const p = trail[n], off = (i % 2 ? 1 : -1) * 6;
+      const n = 8 * (i + 1), off = (i % 2 ? 1 : -1) * 6;
+      const p = n < trail.length ? trail[n] : { x: player.x - f.x * 36 * (i + 1), y: player.y - f.y * 36 * (i + 1) };
       tx = p.x + off; ty = p.y + 4;
     }
-    if (Math.hypot(player.x - fl.x, player.y - fl.y) > 320) { fl.x = player.x - f.x * 40 * (i + 1); fl.y = player.y - f.y * 40 * (i + 1); }   // never lost far behind
+    if (Math.hypot(player.x - fl.x, player.y - fl.y) > 190) { fl.x = player.x - f.x * 40 * (i + 1); fl.y = player.y - f.y * 40 * (i + 1); }   // never lost far behind
     const e = Math.min(1, dt * (fl.visit > 0 ? 1.4 : 3));
     fl.x += (tx - fl.x) * e; fl.y += (ty - fl.y) * e;
   });
@@ -607,7 +607,7 @@ async function plantLantern() {
   try {
     const s = summit(), move = (S.finale && S.finale.commitment) || '';
     const f = fwd();
-    S.lantern = { x: Math.round(player.x + f.x * 48), y: Math.round(player.y + f.y * 48), text: move };
+    S.lantern = { x: Math.round(player.x + f.x * 88), y: Math.round(player.y + f.y * 88), text: move };
     if (!W.walkable(map, S.lantern.x, S.lantern.y)) S.lantern = { x: Math.round((player.x + s.x) / 2), y: Math.round((player.y + s.y) / 2 + 12), text: move };
     lanternT = performance.now(); save(); showLantern();
     focus = { x: S.lantern.x, y: S.lantern.y, h: .9 };
@@ -672,7 +672,7 @@ function showLantern() {
       g.fillStyle = '#1d1b19'; g.fillText(l, 256, ly);
     });
     const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false }));
-    label.position.set(.2, 1.75, 0); label.scale.set(2.4, .75, 1);
+    label.position.set(.2, 1.62, 0); label.scale.set(1.6, .5, 1);
     grp.add(label); grp.userData.label = label;
   }
   grp.userData.lamp = lamp; grp.userData.glow = glow;
