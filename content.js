@@ -344,6 +344,12 @@ export const UI = {
   linkCopied: 'Link copied',
   backAgain: 'Press back again to leave',
   copyManually: 'Copy the address from your browser to share',
+  // the two versions link to each other from their title screens
+  try3d: 'Try it in 3D', version2d: '2D version',
+  // 3D version only
+  controlsTouch: 'Left side: walk · Right side: look around',
+  controlsKeys: 'WASD or arrows: walk · Drag: look around',
+  comfort: 'Comfort', reduceMotion: 'Reduce motion',
 };
 
 // ---------- the chosen language ----------

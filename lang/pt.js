@@ -304,6 +304,10 @@ export const pt = {
       linkCopied: 'Link copiado',
       backAgain: 'Toque em voltar de novo para sair',
       copyManually: 'Copie o endereço do navegador para compartilhar',
+      try3d: 'Experimente em 3D', version2d: 'Versão 2D',
+      controlsTouch: 'Lado esquerdo: caminhar · Lado direito: olhar ao redor',
+      controlsKeys: 'WASD ou setas: caminhar · Arraste: olhar ao redor',
+      comfort: 'Conforto', reduceMotion: 'Reduzir movimento',
     },
   },
 

@@ -306,6 +306,10 @@ export const fi = {
       linkCopied: 'Linkki kopioitu',
       backAgain: 'Poistu painamalla takaisin uudelleen',
       copyManually: 'Kopioi osoite selaimen osoiteriviltä',
+      try3d: 'Kokeile 3D:nä', version2d: '2D-versio',
+      controlsTouch: 'Vasen puoli: kävele · Oikea puoli: katsele ympärillesi',
+      controlsKeys: 'WASD tai nuolet: kävele · Vedä: katsele ympärillesi',
+      comfort: 'Mukavuus', reduceMotion: 'Vähennä liikettä',
     },
   },
 

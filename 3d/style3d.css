@@ -1,0 +1,13 @@
+/* 3D version: only what differs from ../style.css */
+canvas#game { background: var(--paper); }
+/* floating joystick (left half of the screen) */
+#joy { position: fixed; left: 0; top: 0; width: 88px; height: 88px; margin: -44px 0 0 -44px; border-radius: 50%;
+  border: 3px solid rgba(29, 27, 25, .4); pointer-events: none; z-index: 5; will-change: transform; }
+#joy i { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%;
+  background: rgba(29, 27, 25, .32); will-change: transform; }
+/* the way to the Lantern Summit, when it is off screen */
+#guide { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 4; will-change: transform; display: flex; flex-direction: column; align-items: center; width: 0; height: 0; }
+#guide svg { width: 30px; height: 30px; fill: var(--ink); opacity: .85; flex: none; margin-top: -15px; }
+#guide span { font-style: italic; font-size: 15px; white-space: nowrap; margin-top: 2px; padding: 1px 8px; border-radius: 10px;
+  background: rgba(247, 242, 231, .85); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper-2); }

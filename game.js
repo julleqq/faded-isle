@@ -712,7 +712,8 @@ function title() {
     hasSave ? h('button', { class: 'primary', 'data-go': 'continue', onclick: () => go(false) }, U.continue) : null,
     h('button', { class: hasSave ? '' : 'primary', 'data-go': 'new', onclick: () => go(true) }, hasSave ? U.newJourney : U.begin));
   p.append(h('div', { class: 'titlecard' }, langSwitch(false), h('div', { class: 'seal' }, '心'), h('h1', {}, C.TITLE), h('p', { class: 'sub' }, C.SUBTITLE), status, btns,
-           h('p', { class: 'fine foot' }, C.DISCLAIMER, h('br'), U.titleFoot)));
+           h('p', { class: 'fine foot' }, C.DISCLAIMER, h('br'), U.titleFoot),
+           window.__SINGLE_FILE__ ? null : h('a', { class: 'verlink', href: '3d/' }, U.try3d)));
   return { ready: () => { status.remove(); btns.hidden = false; } };
 }
 
